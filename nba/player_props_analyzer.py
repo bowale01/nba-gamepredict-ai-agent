@@ -13,32 +13,15 @@ class NBAPlayerPropsAnalyzer:
     """Analyzes individual player performance for prop betting predictions"""
     
     def __init__(self):
-        """Initialize player props analyzer with ESPN API"""
+        """Initialize player props analyzer with ESPN API - NO MOCK DATA"""
         self.espn_base = "http://site.api.espn.com/apis/site/v2/sports/basketball/nba"
-        self.star_players = {
-            # Lakers
-            "Lakers": ["LeBron James", "Anthony Davis"],
-            # Warriors
-            "Warriors": ["Stephen Curry", "Draymond Green"],
-            # Nuggets
-            "Nuggets": ["Nikola Jokic", "Jamal Murray"],
-            # Celtics
-            "Celtics": ["Jayson Tatum", "Jaylen Brown"],
-            # Bucks
-            "Bucks": ["Giannis Antetokounmpo", "Damian Lillard"],
-            # Mavericks
-            "Mavericks": ["Luka Doncic", "Kyrie Irving"],
-            # Suns
-            "Suns": ["Kevin Durant", "Devin Booker"],
-            # 76ers
-            "76ers": ["Joel Embiid", "Tyrese Maxey"],
-            # Knicks
-            "Knicks": ["Jalen Brunson", "Julius Randle"],
-            # Heat
-            "Heat": ["Jimmy Butler", "Bam Adebayo"],
-        }
+        
+        # NO HARDCODED STAR PLAYERS - MUST FETCH FROM REAL API
+        # If we can't get real data, we DON'T make predictions
+        
         print("🌟 NBA Player Props Analyzer initialized")
         print("🎯 Focus: Points, Rebounds, Assists, 3PT, PRA")
+        print("⚠️ REAL DATA ONLY - No mock data for real money betting")
     
     def get_team_roster(self, team_id: int) -> List[Dict]:
         """Fetch team roster from ESPN API"""
@@ -217,118 +200,74 @@ class NBAPlayerPropsAnalyzer:
         
         all_props = []
         
-        # Identify star players for each team
-        home_stars = self._get_team_stars(home_team)
-        away_stars = self._get_team_stars(away_team)
-        
         print(f"\n🌟 Analyzing star player props for {away_team} @ {home_team}")
         
-        if not home_stars and not away_stars:
-            print(f"   ⚠️ No star players identified for these teams")
-            # Use mock data for demonstration
-            return self._get_mock_player_props(home_team, away_team)
-        
-        # Get home team roster
+        # Get home team roster - REAL DATA ONLY
         home_roster = self.get_team_roster(home_team_id)
         away_roster = self.get_team_roster(away_team_id)
         
-        # If rosters are empty, use mock data
+        # CRITICAL: If we can't get real rosters, DO NOT make predictions
         if not home_roster and not away_roster:
-            print(f"   ⚠️ Could not fetch rosters, using mock data for demonstration")
-            return self._get_mock_player_props(home_team, away_team)
+            print(f"   ❌ SKIPPED - Cannot fetch real roster data from ESPN API")
+            print(f"   ⚠️ Player props disabled for this game (real money safety)")
+            return []  # Return empty - NO MOCK DATA
         
-        # Analyze home team stars
-        for star_name in home_stars:
-            player = self._find_player_in_roster(star_name, home_roster)
-            if player:
-                print(f"   📊 Analyzing {star_name} (Home)")
-                stats = self.get_player_season_stats(player['id'])
-                if stats:
-                    props = self.predict_player_props(star_name, stats, away_team, 'home')
+        # Get top players by analyzing roster (no hardcoded lists)
+        home_top_players = self._get_top_players_from_roster(home_roster, home_team_id)
+        away_top_players = self._get_top_players_from_roster(away_roster, away_team_id)
+        
+        if not home_top_players and not away_top_players:
+            print(f"   ❌ SKIPPED - Cannot identify top players from rosters")
+            return []  # Return empty - NO MOCK DATA
+        
+        # Analyze home team top players
+        for player in home_top_players[:3]:  # Top 3 players only
+            print(f"   📊 Analyzing {player['name']} (Home)")
+            stats = self.get_player_season_stats(player['id'])
+            if stats and stats.get('points_per_game', 0) > 15:  # Only if averaging 15+ PPG
+                props = self.predict_player_props(player['name'], stats, away_team, 'home')
+                if props:
                     all_props.append(props)
         
-        # Analyze away team stars
-        for star_name in away_stars:
-            player = self._find_player_in_roster(star_name, away_roster)
-            if player:
-                print(f"   📊 Analyzing {star_name} (Away)")
-                stats = self.get_player_season_stats(player['id'])
-                if stats:
-                    props = self.predict_player_props(star_name, stats, home_team, 'away')
+        # Analyze away team top players
+        for player in away_top_players[:3]:  # Top 3 players only
+            print(f"   📊 Analyzing {player['name']} (Away)")
+            stats = self.get_player_season_stats(player['id'])
+            if stats and stats.get('points_per_game', 0) > 15:  # Only if averaging 15+ PPG
+                props = self.predict_player_props(player['name'], stats, home_team, 'away')
+                if props:
                     all_props.append(props)
         
-        # If no props generated, use mock data
+        # If no props generated from REAL data, return empty
         if not all_props:
-            print(f"   ⚠️ No real stats available, using mock data for demonstration")
-            return self._get_mock_player_props(home_team, away_team)
+            print(f"   ⚠️ No player props available - insufficient real data")
+            return []  # NO MOCK DATA
         
+        print(f"   ✅ Generated {len(all_props)} player prop predictions from REAL data")
         return all_props
     
-    def _get_mock_player_props(self, home_team: str, away_team: str) -> List[Dict]:
-        """Generate mock player props for demonstration purposes"""
+    def _get_top_players_from_roster(self, roster: List[Dict], team_id: int) -> List[Dict]:
+        """Get top players from roster by fetching their stats - NO HARDCODING"""
         
-        mock_props = []
+        if not roster:
+            return []
         
-        # Get star players for both teams
-        home_stars = self._get_team_stars(home_team)
-        away_stars = self._get_team_stars(away_team)
+        players_with_stats = []
         
-        all_stars = []
-        if home_stars:
-            all_stars.extend([(star, 'home') for star in home_stars[:2]])  # Top 2 home stars
-        if away_stars:
-            all_stars.extend([(star, 'away') for star in away_stars[:2]])  # Top 2 away stars
+        # Fetch stats for each player to identify top performers
+        for player in roster[:15]:  # Check first 15 players (starters + key bench)
+            try:
+                stats = self.get_player_season_stats(player['id'])
+                if stats and stats.get('points_per_game', 0) > 10:  # At least 10 PPG
+                    player['ppg'] = stats['points_per_game']
+                    players_with_stats.append(player)
+            except:
+                continue
         
-        # Mock stats for popular NBA stars
-        star_stats = {
-            "LeBron James": {"ppg": 25.5, "rpg": 7.2, "apg": 8.1, "3pg": 1.8},
-            "Anthony Davis": {"ppg": 24.3, "rpg": 12.1, "apg": 3.5, "3pg": 0.8},
-            "Stephen Curry": {"ppg": 27.4, "rpg": 4.5, "apg": 5.8, "3pg": 4.2},
-            "Draymond Green": {"ppg": 8.6, "rpg": 7.5, "apg": 6.2, "3pg": 0.7},
-            "Nikola Jokic": {"ppg": 29.5, "rpg": 13.7, "apg": 10.2, "3pg": 1.2},
-            "Jamal Murray": {"ppg": 21.2, "rpg": 4.1, "apg": 6.5, "3pg": 2.4},
-            "Jayson Tatum": {"ppg": 26.8, "rpg": 8.3, "apg": 4.9, "3pg": 3.1},
-            "Jaylen Brown": {"ppg": 23.7, "rpg": 5.8, "apg": 3.6, "3pg": 2.2},
-            "Giannis Antetokounmpo": {"ppg": 31.2, "rpg": 11.5, "apg": 6.1, "3pg": 0.5},
-            "Damian Lillard": {"ppg": 25.8, "rpg": 4.3, "apg": 7.2, "3pg": 3.5},
-            "Luka Doncic": {"ppg": 33.5, "rpg": 9.2, "apg": 9.8, "3pg": 3.8},
-            "Kyrie Irving": {"ppg": 26.1, "rpg": 5.1, "apg": 5.5, "3pg": 2.9},
-            "Kevin Durant": {"ppg": 28.7, "rpg": 6.8, "apg": 5.3, "3pg": 2.1},
-            "Devin Booker": {"ppg": 27.3, "rpg": 4.5, "apg": 6.9, "3pg": 2.7},
-        }
+        # Sort by points per game (descending)
+        players_with_stats.sort(key=lambda x: x.get('ppg', 0), reverse=True)
         
-        for star_name, location in all_stars:
-            if star_name in star_stats:
-                stats_data = star_stats[star_name]
-                mock_stats = {
-                    "points_per_game": stats_data["ppg"],
-                    "rebounds_per_game": stats_data["rpg"],
-                    "assists_per_game": stats_data["apg"],
-                    "threes_per_game": stats_data["3pg"],
-                    "minutes_per_game": 35.0,
-                    "games_played": 45
-                }
-                
-                opponent = away_team if location == 'home' else home_team
-                props = self.predict_player_props(star_name, mock_stats, opponent, location)
-                mock_props.append(props)
-        
-        return mock_props
-    
-    def _get_team_stars(self, team_name: str) -> List[str]:
-        """Get list of star players for a team"""
-        # Extract team nickname (e.g., "Los Angeles Lakers" -> "Lakers")
-        for nickname, stars in self.star_players.items():
-            if nickname in team_name:
-                return stars
-        return []
-    
-    def _find_player_in_roster(self, player_name: str, roster: List[Dict]) -> Optional[Dict]:
-        """Find a player in the roster by name"""
-        for player in roster:
-            if player['name'] == player_name or player_name in player['name']:
-                return player
-        return None
+        return players_with_stats[:5]  # Return top 5 scorers
     
     def display_player_props(self, props: Dict):
         """Display player prop predictions in a readable format"""

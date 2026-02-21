@@ -37,7 +37,9 @@ class NBABettingOddsAPI:
             
         except Exception as e:
             print(f"❌ Error fetching NBA betting lines: {e}")
-            return self._get_mock_realistic_nba_lines(date)
+            print(f"⚠️ REAL ODDS UNAVAILABLE - Predictions will use estimated lines")
+            print(f"💡 Get free API key at https://the-odds-api.com (500 requests/month)")
+            return []  # Return empty - NO MOCK DATA
     
     def _get_odds_api_data(self, sport: str, date: str) -> Optional[Dict]:
         """Fetch data from The Odds API"""
@@ -168,51 +170,6 @@ class NBABettingOddsAPI:
         except Exception as e:
             print(f"⚠️  ESPN NBA fallback error: {e}")
             return []
-    
-    def _get_mock_realistic_nba_lines(self, date: str) -> List[Dict]:
-        """Generate realistic mock NBA betting lines as last resort"""
-        
-        print("⚠️  Using mock realistic NBA betting lines - Get API key for real odds!")
-        print("📝 Sign up at https://the-odds-api.com for free 500 requests/month")
-        
-        # NBA totals typically range from 215-245 points
-        # Common NBA totals (sportsbooks use .5 to avoid pushes)
-        common_nba_totals = [
-            215.5, 217.5, 219.5, 221.5, 223.5, 225.5, 227.5, 229.5, 
-            231.5, 233.5, 235.5, 237.5, 239.5, 241.5, 243.5
-        ]
-        
-        mock_games = []
-        import random
-        
-        # NBA teams for mock data
-        nba_teams = [
-            "Boston Celtics", "Miami Heat", "Philadelphia 76ers", 
-            "Milwaukee Bucks", "Cleveland Cavaliers", "New York Knicks",
-            "Denver Nuggets", "Phoenix Suns", "Golden State Warriors",
-            "Los Angeles Lakers", "Sacramento Kings", "Memphis Grizzlies"
-        ]
-        
-        for i in range(5):  # Generate 5 mock games
-            home_team = random.choice(nba_teams)
-            away_team = random.choice([t for t in nba_teams if t != home_team])
-            total_line = random.choice(common_nba_totals)
-            
-            mock_games.append({
-                'home_team': home_team,
-                'away_team': away_team,
-                'commence_time': datetime.now().isoformat(),
-                'moneylines': {
-                    home_team: random.choice([-120, -110, +105, +110, +125]),
-                    away_team: random.choice([-120, -110, +105, +110, +125])
-                },
-                'totals': {
-                    'over': {'line': total_line, 'odds': -110},
-                    'under': {'line': total_line, 'odds': -110}
-                }
-            })
-        
-        return mock_games
     
     def find_game_odds(self, home_team: str, away_team: str, all_odds: List[Dict]) -> Optional[Dict]:
         """Find betting odds for specific NBA game"""

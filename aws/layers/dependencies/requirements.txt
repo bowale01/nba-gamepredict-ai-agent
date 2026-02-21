@@ -1,0 +1,15 @@
+# Lambda Layer Dependencies - Minimal for cost optimization
+# Only include what's needed for Lambda functions
+
+# HTTP requests
+requests==2.32.5
+
+# AWS SDK (already included in Lambda, but specify version)
+boto3==1.35.0
+
+# JSON handling for Decimal
+# (no additional package needed, using standard library)
+
+# Note: pandas, scikit-learn, xgboost NOT included to reduce layer size
+# These can be added later if ML models are needed
+# Current approach: Rule-based predictions with H2H data

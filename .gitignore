@@ -1,6 +1,7 @@
-﻿# Environment
+﻿# Environment Variables (NEVER commit real API keys)
 .env
 .env.local
+*.env
 
 # Python
 __pycache__/
@@ -9,11 +10,50 @@ __pycache__/
 *.pyd
 .venv/
 venv/
+*.egg-info/
 
-# Generated files
+# Generated prediction files
 *.csv
-*.json
 *.log
+nba_predictions*.txt
+nba_real_predictions.txt
+predictions_output.txt
 
 # Folders
 ncaa/
+
+# AWS SAM Build Artifacts
+.aws-sam/
+samconfig.toml
+
+# AWS Deployment Info (contains API URLs and account IDs)
+DEPLOYMENT_SUCCESS.md
+DEPLOYMENT_SUMMARY.txt
+
+# Internal documentation (not needed in public repo)
+AWS_COMPETITION_SUBMISSION.md
+COMPETITION_CHECKLIST.md
+COMPETITION_PITCH.md
+CURRENT_STATUS.md
+DEMO_SCRIPT.md
+FORM_RESPONSES.md
+GITHUB_PUSH_READY.md
+SUBMISSION_FORM_GUIDE.md
+WHAT_WE_BUILT_SUMMARY.md
+SECURITY_CHECK.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+temp/
+tmp/
+*.tmp

@@ -1,16 +1,35 @@
+# -*- coding: utf-8 -*-
 """
 Reliable NBA Predictor using ESPN API + Enhanced Analysis + AGENTIC AI
 Clean, reliable predictions with GPT-4 contextual enhancement
 """
+
+import sys
+import os
+
+# Set UTF-8 encoding for Windows console FIRST
+if sys.platform == 'win32':
+    try:
+        import codecs
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except:
+        pass
 
 import requests
 import json
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import time
-import os
-import sys
 from dotenv import load_dotenv
+
+# Try to import tabulate for table formatting
+try:
+    from tabulate import tabulate
+    TABULATE_AVAILABLE = True
+except ImportError:
+    TABULATE_AVAILABLE = False
+    print("⚠️ tabulate not installed. Install with: pip install tabulate")
 
 # Load environment variables from .env file
 load_dotenv()
@@ -114,13 +133,37 @@ class ReliableNBAPredictor:
         print()
     
     def get_todays_nba_games(self) -> List[Dict]:
-        """Get today's NBA games from ESPN API"""
+        """Get today's and tomorrow's NBA games from ESPN API (48-hour window)"""
         
         try:
-            today = datetime.now().strftime("%Y%m%d")
-            url = f"{self.espn_base}/scoreboard?dates={today}"
+            all_games = []
             
-            print(f"🔍 Fetching NBA games for {today}...")
+            # Fetch today's games
+            today = datetime.now().strftime("%Y%m%d")
+            print(f"🔍 Fetching NBA games for TODAY ({today})...")
+            today_games = self._fetch_games_for_date(today)
+            all_games.extend(today_games)
+            print(f"✅ Found {len(today_games)} games for today")
+            
+            # Fetch tomorrow's games
+            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
+            print(f"🔍 Fetching NBA games for TOMORROW ({tomorrow})...")
+            tomorrow_games = self._fetch_games_for_date(tomorrow)
+            all_games.extend(tomorrow_games)
+            print(f"✅ Found {len(tomorrow_games)} games for tomorrow")
+            
+            print(f"✅ TOTAL: {len(all_games)} NBA games in 48-hour window")
+            return all_games
+                
+        except Exception as e:
+            print(f"❌ Error fetching games: {e}")
+            print(f"⚠️ Cannot generate predictions without real game data")
+            return []  # Return empty - NO SAMPLE DATA
+    
+    def _fetch_games_for_date(self, date_str: str) -> List[Dict]:
+        """Fetch games for a specific date"""
+        try:
+            url = f"{self.espn_base}/scoreboard?dates={date_str}"
             response = requests.get(url, timeout=10)
             
             if response.status_code == 200:
@@ -145,7 +188,7 @@ class ReliableNBAPredictor:
                                 if home_team and away_team:
                                     game = {
                                         "id": event.get('id'),
-                                        "date": today[:4] + '-' + today[4:6] + '-' + today[6:8],
+                                        "date": date_str[:4] + '-' + date_str[4:6] + '-' + date_str[6:8],
                                         "datetime": event.get('date'),
                                         "home_team": home_team['team']['displayName'],
                                         "away_team": away_team['team']['displayName'],
@@ -165,15 +208,13 @@ class ReliableNBAPredictor:
                                     
                                     games.append(game)
                 
-                print(f"✅ Found {len(games)} NBA games for today")
                 return games
             else:
-                print(f"❌ ESPN API error: {response.status_code}")
-                return self._get_sample_games()
+                return []
                 
         except Exception as e:
-            print(f"❌ Error fetching games: {e}")
-            return self._get_sample_games()
+            print(f"❌ Error fetching games for {date_str}: {e}")
+            return []
     
     def get_h2h_analysis(self, home_team: str, away_team: str, home_id: int, away_id: int) -> Dict:
         """Get comprehensive H2H analysis between two NBA teams"""
@@ -760,7 +801,7 @@ class ReliableNBAPredictor:
         predictions = []
         
         for i, game in enumerate(games, 1):
-            print(f"🎯 GAME {i}: {game['away_team']} @ {game['home_team']}")
+            print(f"🎯 GAME {i}: {game['home_team']} - {game['away_team']}")
             print(f"   📍 Venue: {game.get('venue', 'Unknown')}")
             print(f"   🕐 Status: {game.get('status', 'Scheduled')}")
             
@@ -818,7 +859,7 @@ class ReliableNBAPredictor:
                 print(f"   • No bets meet 75% confidence threshold")
                 print(f"   • Recommended: Wait for better opportunities")
             
-            # PLAYER PROPS (if enabled)
+            # PLAYER PROPS (if enabled) - REAL DATA ONLY
             if self.player_props_enabled and self.player_props_analyzer:
                 try:
                     player_props = self.player_props_analyzer.get_star_players_props(
@@ -828,8 +869,8 @@ class ReliableNBAPredictor:
                         game['away_team_id']
                     )
                     
-                    if player_props:
-                        print(f"\n   🌟 STAR PLAYER PROPS (Fastest Growing Market):")
+                    if player_props and len(player_props) > 0:
+                        print(f"\n   🌟 STAR PLAYER PROPS (Real Data Only):")
                         print(f"   " + "-" * 50)
                         for props in player_props:
                             if props.get('high_confidence_props'):
@@ -845,8 +886,12 @@ class ReliableNBAPredictor:
                         # Add to prediction object
                         prediction['player_props'] = player_props
                         prediction['player_props_count'] = len(player_props)
+                    else:
+                        print(f"\n   ⚠️ Player props unavailable - ESPN API roster data not accessible")
+                        print(f"   💡 Game predictions (spread/total/ML) are still accurate")
                 except Exception as e:
                     print(f"   ⚠️ Player props analysis error: {e}")
+                    print(f"   💡 Game predictions (spread/total/ML) are still accurate")
             
             print(f"\n   {'='*50}")
             print()
@@ -860,7 +905,90 @@ class ReliableNBAPredictor:
         print(f"   Data Source: Reliable ESPN API")
         print()
         
+        # Print table summary
+        self._print_predictions_table(predictions)
+        
         return predictions
+    
+    def _print_predictions_table(self, predictions: List[Dict]):
+        """Print predictions in a clean table format"""
+        
+        if not predictions:
+            return
+        
+        print("\n" + "="*120)
+        print("📊 PREDICTIONS SUMMARY TABLE")
+        print("="*120 + "\n")
+        
+        # Main predictions table
+        table_data = []
+        for p in predictions:
+            # Format time
+            try:
+                game_time = datetime.fromisoformat(p.get('datetime', '').replace('Z', '+00:00'))
+                time_str = game_time.strftime("%I:%M %p")
+            except:
+                time_str = "TBD"
+            
+            # Get high confidence bets
+            high_conf_bets = ", ".join(p['high_confidence_bets']) if p['high_confidence_bets'] else "None"
+            if len(high_conf_bets) > 40:
+                high_conf_bets = high_conf_bets[:37] + "..."
+            
+            table_data.append([
+                f"{p['home_team']} - {p['away_team']}",
+                time_str,
+                f"{p['predicted_winner']}",
+                f"{p['winner_confidence']:.1%}",
+                p['home_team_spread'],
+                p.get('over_under_recommendation', 'OVER') + f" {p['predicted_total']}",
+                f"{p['over_probability']:.1%}",
+                high_conf_bets
+            ])
+        
+        if TABULATE_AVAILABLE:
+            headers = ["Game (Home - Away)", "Time", "Winner", "Conf%", "Spread", "Over/Under", "Conf%", "High-Confidence Bets (75%+)"]
+            print(tabulate(table_data, headers=headers, tablefmt="grid"))
+        else:
+            # Fallback to simple formatting
+            print(f"{'Game':<50} {'Time':<10} {'Winner':<25} {'Conf':<8} {'Spread':<15} {'O/U':<20} {'Conf':<8} {'High-Conf Bets':<30}")
+            print("-" * 180)
+            for row in table_data:
+                print(f"{row[0]:<50} {row[1]:<10} {row[2]:<25} {row[3]:<8} {row[4]:<15} {row[5]:<20} {row[6]:<8} {row[7]:<30}")
+        
+        # Player props table (if any)
+        player_props_data = []
+        for p in predictions:
+            if p.get('player_props'):
+                for props in p['player_props']:
+                    if props.get('high_confidence_props'):
+                        for prop in props['high_confidence_props']:
+                            player_props_data.append([
+                                f"{p['home_team']} - {p['away_team']}",
+                                props['player_name'],
+                                prop['type'],
+                                prop['recommendation'],
+                                f"{prop['confidence']:.1%}"
+                            ])
+        
+        if player_props_data:
+            print("\n" + "="*120)
+            print("🌟 STAR PLAYER PROPS (85%+ Confidence)")
+            print("="*120 + "\n")
+            
+            if TABULATE_AVAILABLE:
+                headers = ["Game", "Player", "Prop Type", "Prediction", "Confidence"]
+                print(tabulate(player_props_data, headers=headers, tablefmt="grid"))
+            else:
+                print(f"{'Game':<50} {'Player':<25} {'Prop':<15} {'Prediction':<20} {'Confidence':<12}")
+                print("-" * 122)
+                for row in player_props_data:
+                    print(f"{row[0]:<50} {row[1]:<25} {row[2]:<15} {row[3]:<20} {row[4]:<12}")
+        
+        print("\n" + "="*120)
+        print("💡 Focus on High-Confidence Bets (75%+) for best value")
+        print("="*120 + "\n")
+    
     
     def _get_realistic_nba_betting_total(self, home_team: str, away_team: str) -> float:
         """Get realistic NBA betting total using real sportsbook lines or smart estimates"""
@@ -888,40 +1016,6 @@ class ReliableNBAPredictor:
         
         import random
         return random.choice(common_nba_totals)
-    
-    def _get_sample_games(self) -> List[Dict]:
-        """Return sample games when API is unavailable"""
-        
-        today = datetime.now().strftime("%Y-%m-%d")
-        
-        return [
-            {
-                "id": "sample_1",
-                "date": today,
-                "datetime": f"{today}T20:00:00Z",
-                "home_team": "Los Angeles Lakers",
-                "away_team": "Golden State Warriors",
-                "home_team_id": 13,
-                "away_team_id": 9,
-                "home_abbreviation": "LAL",
-                "away_abbreviation": "GSW",
-                "status": "Scheduled",
-                "venue": "Crypto.com Arena"
-            },
-            {
-                "id": "sample_2",
-                "date": today,
-                "datetime": f"{today}T22:30:00Z", 
-                "home_team": "Boston Celtics",
-                "away_team": "Miami Heat",
-                "home_team_id": 2,
-                "away_team_id": 14,
-                "home_abbreviation": "BOS",
-                "away_abbreviation": "MIA",
-                "status": "Scheduled",
-                "venue": "TD Garden"
-            }
-        ]
 
 
 def main():

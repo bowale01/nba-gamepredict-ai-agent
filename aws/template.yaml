@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: NBA GamePredict AI Agent - Serverless Architecture
+
+# Global configuration for all functions
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.13
+    Environment:
+      Variables:
+        DYNAMODB_TABLE: !Ref NBAGamesTable
+        PREDICTIONS_TABLE: !Ref PredictionsTable
+        H2H_TABLE: !Ref H2HHistoryTable
+        ENVIRONMENT: production
+        LOG_LEVEL: INFO
+    Layers:
+      - !Ref DependenciesLayer
+
+Resources:
+  # ==========================================
+  # API Gateway
+  # ==========================================
+  NBAGamePredictAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Api-Key'"
+        AllowOrigin: "'*'"
+      Auth:
+        ApiKeyRequired: false  # Set to true for production
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingRateLimit: 100
+          ThrottlingBurstLimit: 200
+
+  # ==========================================
+  # Lambda Functions
+  # ==========================================
+  
+  # Health Check Function
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/health_check/
+      Handler: handler.lambda_handler
+      Description: System health check endpoint
+      Events:
+        HealthCheck:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NBAGamePredictAPI
+            Path: /health
+            Method: GET
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NBAGamesTable
+
+  # Daily Predictions Function
+  DailyPredictionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/daily_predictions/
+      Handler: handler.lambda_handler
+      Description: Get all high-confidence NBA predictions for today
+      Timeout: 60  # Longer timeout for multiple predictions
+      MemorySize: 512  # More memory for AI processing
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref NBAGamesTable
+          PREDICTIONS_TABLE: !Ref PredictionsTable
+          H2H_TABLE: !Ref H2HHistoryTable
+          AI_ENHANCEMENT_ENABLED: 'true'  # Enable Bedrock AI validation
+          BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0'
+      Events:
+        GetPredictions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NBAGamePredictAPI
+            Path: /daily-predictions
+            Method: GET
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NBAGamesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PredictionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref H2HHistoryTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+
+  # Single Game Prediction Function
+  SinglePredictionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/single_prediction/
+      Handler: handler.lambda_handler
+      Description: Predict a specific NBA game
+      Timeout: 45
+      MemorySize: 512
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref NBAGamesTable
+          PREDICTIONS_TABLE: !Ref PredictionsTable
+          H2H_TABLE: !Ref H2HHistoryTable
+          AI_ENHANCEMENT_ENABLED: 'true'  # Enable Bedrock AI validation
+          BEDROCK_MODEL_ID: 'anthropic.claude-3-haiku-20240307-v1:0'
+      Events:
+        PredictGame:
+          Type: Api
+          Properties:
+            RestApiId: !Ref NBAGamePredictAPI
+            Path: /predict
+            Method: POST
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NBAGamesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PredictionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref H2HHistoryTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+
+  # Data Collection Function (Scheduled)
+  DataCollectionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/data_collection/
+      Handler: handler.lambda_handler
+      Description: Collect NBA game data from ESPN API
+      Timeout: 60
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 12 * * ? *)  # Run daily at 12 PM UTC
+            Description: Collect daily NBA games
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NBAGamesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref H2HHistoryTable
+
+  # ==========================================
+  # Lambda Layer (Dependencies)
+  # ==========================================
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: nba-gamepredict-dependencies
+      Description: Python dependencies for NBA GamePredict
+      ContentUri: layers/dependencies/
+      CompatibleRuntimes:
+        - python3.13
+      RetentionPolicy: Retain
+
+  # ==========================================
+  # DynamoDB Tables
+  # ==========================================
+  
+  # NBA Games Table
+  NBAGamesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: nba-games
+      BillingMode: PAY_PER_REQUEST  # On-demand pricing (no upfront cost)
+      AttributeDefinitions:
+        - AttributeName: game_id
+          AttributeType: S
+        - AttributeName: game_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: game_id
+          KeyType: HASH
+        - AttributeName: game_date
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Application
+          Value: NBA-GamePredict
+        - Key: CostCenter
+          Value: Free-Tier
+
+  # Predictions Table
+  PredictionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: nba-predictions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: prediction_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: prediction_id
+          KeyType: HASH
+        - AttributeName: created_at
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Application
+          Value: NBA-GamePredict
+
+  # H2H History Table
+  H2HHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: nba-h2h-history
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: matchup_key
+          AttributeType: S
+        - AttributeName: game_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: matchup_key
+          KeyType: HASH
+        - AttributeName: game_date
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Application
+          Value: NBA-GamePredict
+
+  # ==========================================
+  # S3 Bucket (Logs & Archives)
+  # ==========================================
+  PredictionLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'nba-gamepredict-logs-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 30  # Delete logs after 30 days
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA  # Move to cheaper storage after 30 days
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Application
+          Value: NBA-GamePredict
+
+  # ==========================================
+  # CloudWatch Alarms (Cost Monitoring)
+  # ==========================================
+  HighCostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: NBA-GamePredict-High-Cost
+      AlarmDescription: Alert when daily cost exceeds $1
+      MetricName: EstimatedCharges
+      Namespace: AWS/Billing
+      Statistic: Maximum
+      Period: 86400  # 24 hours
+      EvaluationPeriods: 1
+      Threshold: 1.0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Currency
+          Value: USD
+
+  # Lambda Error Alarm
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: NBA-GamePredict-Lambda-Errors
+      AlarmDescription: Alert on Lambda function errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+
+# ==========================================
+# Outputs
+# ==========================================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${NBAGamePredictAPI}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: NBAGamePredictAPIEndpoint
+
+  HealthCheckUrl:
+    Description: Health check endpoint
+    Value: !Sub 'https://${NBAGamePredictAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/health'
+
+  DailyPredictionsUrl:
+    Description: Daily predictions endpoint
+    Value: !Sub 'https://${NBAGamePredictAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/daily-predictions'
+
+  NBAGamesTableName:
+    Description: DynamoDB table for NBA games
+    Value: !Ref NBAGamesTable
+
+  PredictionsTableName:
+    Description: DynamoDB table for predictions
+    Value: !Ref PredictionsTable
+
+  LogsBucketName:
+    Description: S3 bucket for logs
+    Value: !Ref PredictionLogsBucket

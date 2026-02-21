@@ -10,7 +10,7 @@ NBA GamePredict AI Agent is an intelligent betting prediction system that combin
 
 **Hybrid Architecture:**
 - **Real ESPN API Data**: Actual H2H game scores (no fake/fallback data)
-- **GPT-4o Validation**: AI validates and corrects ESPN data using historical knowledge
+- **Dual AI Validation**: GPT-4o + Amazon Bedrock Claude for data verification
 - **Agentic AI Agent**: Autonomous decision-making and contextual analysis
 - **75%+ Confidence Threshold**: Only recommend high-quality bets
 
@@ -22,11 +22,12 @@ NBA GamePredict AI Agent is an intelligent betting prediction system that combin
 
 - **🛡️ Capital Protection**: 75% confidence threshold - only high-quality predictions
 - **📊 Real Data Only**: ESPN API H2H data - no fallback/simulated data
-- **🤖 GPT-4o Validation**: AI validates ESPN data and provides historical context
+- **🤖 Dual AI Validation**: GPT-4o + Amazon Bedrock Claude for data verification
 - **🎯 Agentic AI Agent**: Autonomous decision-making with LLM intelligence
-- **⚡ Hybrid Approach**: ESPN API (real scores) + GPT-4o (validation & context)
+- **⚡ Hybrid Approach**: ESPN API (real scores) + Dual AI validation layers
 - **🏀 Player Props**: Individual player predictions (Points, Rebounds, Assists, PRA)
 - **💰 Free NBA Data**: ESPN API (no authentication required)
+- **☁️ AWS Bedrock**: Real-time AI validation for betting safety (~$0.07/month)
 
 ---
 
@@ -36,17 +37,44 @@ NBA GamePredict AI Agent is an intelligent betting prediction system that combin
 |-----------|--------|----------|
 | **Real H2H Data** | ✅ Complete | ESPN API only - fallback removed |
 | **GPT-4o Validation** | ✅ Complete | Validates ESPN data accuracy |
+| **Bedrock AI Validation** | ✅ Complete | Claude 3 Haiku for betting safety |
 | **Agentic AI Agent** | ✅ Complete | Autonomous decision-making |
-| **LLM Integration** | ✅ Complete | GPT-4o for validation & context |
+| **LLM Integration** | ✅ Complete | Dual AI layers (GPT-4o + Bedrock) |
 | **Player Props** | ✅ Complete | Points, Rebounds, Assists, 3PT, PRA |
 | **Confidence Filtering** | ✅ Complete | 75%+ threshold enforced |
 | **API Service** | ✅ Complete | FastAPI with Swagger docs |
+| **AWS Deployment** | ✅ Complete | Serverless architecture on AWS |
+| **Cost Optimization** | ✅ Complete | Free Tier compliant, $0-$22/month |
+| **Infrastructure as Code** | ✅ Complete | SAM template for automated deployment |
 
 ---
 
 ## 🚀 Quick Start
 
-### Installation
+### Option 1: Deploy to AWS (Recommended) ⚡
+
+**Production-ready serverless deployment in 20 minutes:**
+
+```bash
+# Install AWS tools
+pip install awscli aws-sam-cli
+aws configure
+
+# Deploy to AWS
+cd aws
+chmod +x deploy.sh
+./deploy.sh
+```
+
+**See `QUICK_START.md` for details**
+
+**Cost: $0 (Free Tier) or $0.15-$22/month after**
+
+---
+
+### Option 2: Local Development
+
+**Installation:**
 
 ```bash
 # Clone repository
@@ -65,9 +93,9 @@ cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY
 ```
 
-### Run the System
+**Run the System:**
 
-**Option 1: API Service**
+**Local API Service:**
 ```bash
 python api_service.py
 
@@ -77,7 +105,7 @@ python api_service.py
 # http://localhost:8000/health
 ```
 
-**Option 2: Direct NBA Module**
+**Direct NBA Module:**
 ```bash
 cd nba
 python predictor.py
@@ -96,16 +124,24 @@ flowchart TD
     H2H --> CheckData{Sufficient<br/>Real Data?}
     
     CheckData -->|No < 4 games| Skip[Skip Game - No Prediction]
-    CheckData -->|Yes ≥ 4 games| GPT4o[GPT-4o Validation LLM]
+    CheckData -->|Yes ≥ 4 games| Calculate[Calculate Statistics]
+    
+    Calculate --> Bedrock[Amazon Bedrock Claude<br/>Validate H2H Data Quality]
+    
+    Bedrock --> BedrockCheck{Data<br/>Quality?}
+    
+    BedrockCheck -->|SKIP_GAME| Skip
+    BedrockCheck -->|USE_CAUTION| AdjustDown[Reduce Confidence -10%]
+    BedrockCheck -->|TRUST_DATA| GPT4o[GPT-4o Validation LLM<br/>Historical Context]
+    
+    AdjustDown --> GPT4o
     
     GPT4o --> Validate{Historical<br/>Context<br/>Valid?}
     
     Validate -->|Questionable| Adjust[Adjust Win Probabilities<br/>±15% based on context]
-    Validate -->|Accurate| Calculate[Calculate Statistics]
+    Validate -->|Accurate| Agent[Agentic AI Agent<br/>Autonomous Decision Making]
     
-    Adjust --> Calculate
-    
-    Calculate --> Agent[Agentic AI Agent<br/>Autonomous Decision Making]
+    Adjust --> Agent
     
     Agent --> Predict[Generate Predictions:<br/>- Moneyline<br/>- Over/Under<br/>- Player Props<br/>- Spreads]
     
@@ -122,6 +158,7 @@ flowchart TD
     
     style Start fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
     style End fill:#f44336,stroke:#333,stroke-width:2px,color:#fff
+    style Bedrock fill:#FF6F00,stroke:#333,stroke-width:2px,color:#fff
     style GPT4o fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
     style Agent fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
     style Approve fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
@@ -129,6 +166,7 @@ flowchart TD
     style Filter fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
     style Validate fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
     style CheckData fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style BedrockCheck fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
 ```
 
 ### 📊 Flow Explanation:
@@ -137,11 +175,12 @@ flowchart TD
 |------|-----------|--------|
 | 1️⃣ | **ESPN API** | Fetch today's games + H2H history (real data only) |
 | 2️⃣ | **Data Check** | Verify ≥4 games available (skip if insufficient) |
-| 3️⃣ | **GPT-4o LLM** | Validate H2H data against historical knowledge |
-| 4️⃣ | **AI Adjustment** | Adjust predictions if EPA data questionable |
-| 5️⃣ | **Agentic AI** | Autonomous analysis & prediction generation |
-| 6️⃣ | **Confidence Filter** | 75% threshold gate (reject low confidence) |
-| 7️⃣ | **Output** | High-confidence predictions to user |
+| 3️⃣ | **Bedrock Claude** | Validate H2H data quality and detect anomalies |
+| 4️⃣ | **GPT-4o LLM** | Validate historical context and provide insights |
+| 5️⃣ | **AI Adjustment** | Adjust predictions if data questionable |
+| 6️⃣ | **Agentic AI** | Autonomous analysis & prediction generation |
+| 7️⃣ | **Confidence Filter** | 75% threshold gate (reject low confidence) |
+| 8️⃣ | **Output** | High-confidence predictions to user |
 
 ### 🎯 Decision Points:
 
@@ -150,7 +189,8 @@ flowchart TD
 - **Rounded (▬)**: Start/End points
 - **Colors**: 
   - 🟢 Green = Start/Approved
-  - 🔵 Blue = AI/LLM Processing
+  - 🟠 Orange = Bedrock AI Validation
+  - 🔵 Blue = GPT-4o Processing
   - 🟠 Orange = Agentic AI Agent
   - 🟣 Purple = Decision Points
   - 🔴 Red = Rejected/End
@@ -181,27 +221,34 @@ gamepredict_ai_agent/
 
 ## 🎯 How It Works
 
-### 🔄 Hybrid Architecture (Option 3)
+### 🔄 Hybrid Architecture with Dual AI Validation
 
 **1. Real Data Collection (ESPN API)**
 - Fetches today's NBA games from ESPN API
 - Collects 8-10 historical H2H games between teams
 - Gets actual scores, dates, winners - NO fake/fallback data
 
-**2. GPT-4o Validation Layer**
+**2. Bedrock AI Validation Layer (First Pass)**
+- Amazon Bedrock Claude validates H2H data quality
+- Checks for anomalies and data inconsistencies
+- Detects roster changes that affect H2H relevance
+- Provides betting advice: TRUST_DATA / USE_CAUTION / SKIP_GAME
+- Cost: ~$0.07/month for typical usage
+
+**3. GPT-4o Validation Layer (Second Pass)**
 - AI validates if ESPN data makes sense historically
 - Example: "Does it make sense that Grizzlies beat Lakers 7/10 times?"
 - Provides historical context (e.g., "Lakers historically dominate this matchup")
 - Adjusts predictions if ESPN data is questionable
 
-**3. Statistical Analysis**
+**4. Statistical Analysis**
 - Calculates win probabilities from validated H2H data
 - Analyzes scoring trends, home/away patterns
 - Generates predictions for multiple markets
 
-**4. Agentic AI Agent**
+**5. Agentic AI Agent**
 - Autonomous decision-making (no human intervention needed)
-- Combines ESPN data + GPT-4o insights
+- Combines ESPN data + Dual AI insights (Bedrock + GPT-4o)
 - Filters predictions: only shows 75%+ confidence bets
 - Protects user capital by rejecting low-confidence picks
 
@@ -209,9 +256,9 @@ gamepredict_ai_agent/
 
 - **Autonomous**: Makes decisions without human intervention
 - **Goal-Directed**: Optimizes for accurate predictions
-- **Multi-Source**: Combines ESPN API + GPT-4o + Statistical models
-- **Validation**: Uses LLM to validate and correct data
-- **Reasoning**: GPT-4o provides context and explanations
+- **Multi-Source**: Combines ESPN API + Bedrock + GPT-4o + Statistical models
+- **Dual Validation**: Two AI layers catch different types of issues
+- **Reasoning**: Both AIs provide context and explanations
 
 ---
 
@@ -267,6 +314,46 @@ System: Adjusts prediction to favor Lakers
 **Cost:** ~$0.01-0.03 per game (GPT-4o is 50% cheaper than GPT-4)
 
 **Note:** System works with real ESPN data even without GPT-4o, but validation layer adds accuracy.
+
+---
+
+## ☁️ Amazon Bedrock AI Validation
+
+The system uses **Amazon Bedrock Claude 3 Haiku** for real-time betting safety validation:
+
+**What Bedrock Does:**
+- **H2H Data Quality Check**: Validates historical data makes sense
+- **Anomaly Detection**: Catches data inconsistencies before you bet
+- **Roster Change Detection**: Identifies when old H2H data is outdated
+- **Betting Advice**: TRUST_DATA / USE_CAUTION / SKIP_GAME recommendations
+
+**Example Validation:**
+```
+H2H Data: Wizards beat Lakers 10/10 games
+Bedrock: "QUESTIONABLE - Doesn't match historical trends"
+System: Reduces confidence from 85% to 75%
+```
+
+**Cost:** ~$0.07/month (typical usage) or ~$0.50/month (heavy usage)
+
+**Deployment:**
+```bash
+# Windows PowerShell
+cd aws
+./deploy_with_bedrock.ps1
+
+# Linux/Mac
+cd aws
+./deploy_with_bedrock.sh
+```
+
+**Benefits for Real Money Betting:**
+- ✅ Catches data anomalies before you bet
+- ✅ Identifies misleading H2H data
+- ✅ Prevents bets on questionable predictions
+- ✅ Provides second opinion on close calls
+
+**See `BEDROCK_AI_VALIDATION.md` for detailed documentation.**
 
 ---
 
@@ -370,10 +457,11 @@ Simple: pick the winner.
 
 - **Language**: Python 3.13+
 - **LLM**: OpenAI GPT-4o (validation & context)
+- **Cloud AI**: Amazon Bedrock Claude 3 Haiku (betting safety)
 - **Agentic AI**: Autonomous decision-making agent
 - **API Framework**: FastAPI, Uvicorn
 - **Data Source**: ESPN NBA API (real data only)
-- **Data Processing**: pandas, numpy, requests
+- **Data Processing**: pandas, numpy, requests, tabulate
 - **No Fallback Data**: Only real ESPN API results used
 
 ---
@@ -383,11 +471,15 @@ Simple: pick the winner.
 ### ✅ Phase 1 - Hybrid AI System (COMPLETED)
 - ✅ **ESPN API Integration**: Real H2H data collection (no fallback/fake data)
 - ✅ **GPT-4o Validation**: LLM validates ESPN data accuracy
+- ✅ **Bedrock AI Validation**: Claude 3 Haiku for betting safety (~$0.07/month)
 - ✅ **Agentic AI Agent**: Autonomous decision-making system
+- ✅ **Dual AI Layers**: Bedrock + GPT-4o for comprehensive validation
 - ✅ **Data Validation**: AI catches discrepancies (e.g., Lakers vs Grizzlies)
 - ✅ **Player Props**: Points, Rebounds, Assists, 3PT, PRA for star players
 - ✅ **Confidence System**: 75% threshold for capital protection
 - ✅ **Multi-Market Support**: Moneyline, Over/Under, Halftime, Player Props
+- ✅ **Table Output**: Clean formatted tables for easy scanning
+- ✅ **48-Hour Window**: Analyzes today + tomorrow games (catches midnight games)
 
 ### 🔄 Phase 2 - API & Infrastructure (IN PROGRESS)
 - 🔄 **FastAPI Service**: REST API with Swagger documentation
@@ -458,11 +550,12 @@ Most betting systems try to give you predictions for every game. We don't. We on
 
 ### Technical Advantages
 1. **Real H2H Intelligence**: We analyze actual historical matchups between teams (not just overall stats)
-2. **Dual-Layer Analysis**: 80% statistical patterns + 20% AI contextual understanding
+2. **Dual AI Validation**: Bedrock (data quality) + GPT-4o (historical context) = comprehensive safety
 3. **Capital Protection First**: Automatically reject predictions below 75% confidence
 4. **Free Data Sources**: ESPN NBA API (no expensive data subscriptions)
-5. **GPT-4 Powered Context**: Injuries, rest, momentum, coaching analysis
+5. **Cloud AI Integration**: Amazon Bedrock for real-time validation (~$0.07/month)
 6. **Transparent Methodology**: Open about how predictions are made
+7. **48-Hour Analysis**: Catches all games including midnight matchups
 
 ### What We're Building Toward
 - A trusted NBA betting intelligence system
