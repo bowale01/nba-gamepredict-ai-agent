@@ -20,7 +20,7 @@ class NBAH2HCollector:
         })
     
     def get_team_h2h_data(self, home_team: str, away_team: str) -> List[Dict]:
-        """Get real head-to-head data between two NBA teams"""
+        """Get real head-to-head data between two NBA teams - REAL DATA ONLY"""
         
         try:
             # Get team IDs first
@@ -28,8 +28,8 @@ class NBAH2HCollector:
             away_team_id = self._get_nba_team_id(away_team)
             
             if not home_team_id or not away_team_id:
-                print(f"⚠️  Could not find NBA team IDs for {home_team} vs {away_team}")
-                return self._generate_realistic_nba_h2h_fallback(home_team, away_team)
+                print(f"❌ Could not find NBA team IDs for {home_team} vs {away_team} - NO PREDICTION")
+                return []
             
             # Get historical games between these teams
             h2h_games = self._fetch_nba_h2h_games(home_team_id, away_team_id, home_team, away_team)
@@ -38,12 +38,12 @@ class NBAH2HCollector:
                 print(f"✅ Found {len(h2h_games)} real NBA H2H games: {home_team} vs {away_team}")
                 return h2h_games
             else:
-                print(f"⚠️  Only {len(h2h_games)} NBA H2H games found, using realistic fallback")
-                return self._generate_realistic_nba_h2h_fallback(home_team, away_team)
+                print(f"❌ Only {len(h2h_games)} NBA H2H games found - INSUFFICIENT REAL DATA")
+                return []
                 
         except Exception as e:
-            print(f"❌ Error fetching NBA H2H data: {e}")
-            return self._generate_realistic_nba_h2h_fallback(home_team, away_team)
+            print(f"❌ Error fetching NBA H2H data: {e} - NO PREDICTION")
+            return []
     
     def _get_nba_team_id(self, team_name: str) -> Optional[int]:
         """Get ESPN NBA team ID for a team"""
@@ -285,50 +285,7 @@ class NBAH2HCollector:
         
         return name
     
-    def _generate_realistic_nba_h2h_fallback(self, home_team: str, away_team: str) -> List[Dict]:
-        """Generate realistic NBA H2H fallback data when API fails"""
-        
-        print(f"📊 Using realistic NBA H2H patterns for {home_team} vs {away_team}")
-        
-        import random
-        
-        # NBA typical scoring ranges
-        avg_total = random.randint(210, 230)  # NBA averages 215-225 points
-        score_variance = 15
-        
-        num_games = random.randint(6, 10)  # 6-10 recent meetings
-        h2h_games = []
-        
-        for i in range(num_games):
-            # Vary around average total
-            total_points = avg_total + random.randint(-score_variance, score_variance)
-            
-            # Realistic NBA score distribution
-            home_score = random.randint(int(total_points * 0.45), int(total_points * 0.55))
-            away_score = total_points - home_score
-            
-            # Halftime typically 48% of total points
-            halftime_total = int(total_points * random.uniform(0.46, 0.50))
-            
-            winner = home_team if home_score > away_score else away_team
-            
-            # Recent dates (NBA seasons)
-            days_ago = random.randint(30, 800)  # 30 days to ~2 years
-            game_date = (datetime.now() - timedelta(days=days_ago)).strftime('%Y-%m-%d')
-            
-            h2h_games.append({
-                "total_points": total_points,
-                "home_score": home_score,
-                "away_score": away_score,
-                "halftime_total": halftime_total,
-                "winner": winner,
-                "date": game_date,
-                "home_team": home_team,
-                "away_team": away_team,
-                "source": "REALISTIC_NBA_PATTERN"
-            })
-        
-        return sorted(h2h_games, key=lambda x: x['date'], reverse=True)
+
 
 # Test the NBA H2H collector
 if __name__ == "__main__":

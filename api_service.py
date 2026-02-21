@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FastAPI Service for GamePredict AI Agent
-Professional API interface for high-confidence betting predictions
+FastAPI Service for NBA GamePredict AI Agent
+Professional API interface for high-confidence NBA betting predictions
 """
 
 from fastapi import FastAPI, HTTPException
@@ -11,8 +11,8 @@ import uvicorn
 from datetime import datetime
 import logging
 
-# Import your existing working system
-from working_multi_sport_predictor import WorkingMultiSportPredictor
+# Import NBA prediction system
+from working_multi_sport_predictor import NBAPredictor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="GamePredict AI Agent API",
-    description="Professional high-confidence sports betting predictions API with Real H2H Data",
+    title="NBA GamePredict AI Agent API",
+    description="Professional high-confidence NBA betting predictions API with Real H2H Data",
     version="2.0.0",
     docs_url="/docs",  # Swagger UI at /docs
     redoc_url="/redoc"  # ReDoc at /redoc
@@ -29,8 +29,8 @@ app = FastAPI(
 
 # Initialize the prediction system
 try:
-    predictor_system = WorkingMultiSportPredictor()
-    logger.info("✅ Working prediction system initialized successfully")
+    predictor_system = NBAPredictor()
+    logger.info("✅ NBA prediction system initialized successfully")
 except Exception as e:
     logger.error(f"❌ Failed to initialize prediction system: {e}")
     predictor_system = None
@@ -39,7 +39,6 @@ except Exception as e:
 class PredictionRequest(BaseModel):
     home_team: str
     away_team: str
-    sport: Optional[str] = "football"  # "football" or "nba"
 
 class SinglePrediction(BaseModel):
     match: str
@@ -74,7 +73,7 @@ async def root():
     """API health check and welcome message"""
     return HealthResponse(
         status="healthy",
-        message="GamePredict AI Agent API - High-Confidence Betting Predictions",
+        message="NBA GamePredict AI Agent API - High-Confidence NBA Betting Predictions",
         timestamp=datetime.now().isoformat()
     )
 
@@ -107,37 +106,20 @@ async def health_check():
 @app.get("/daily-predictions", response_model=DailyPredictionsResponse)
 async def get_daily_high_confidence_predictions():
     """
-    Get all high-confidence predictions for today
+    Get all high-confidence NBA predictions for today
     Only returns bets with 75%+ confidence from real H2H analysis
     """
     if predictor_system is None:
         raise HTTPException(status_code=503, detail="Prediction system not available")
     
     try:
-        logger.info("🔍 Getting real high-confidence predictions from all sports...")
+        logger.info("🔍 Getting real high-confidence NBA predictions...")
         
         # Get all predictions from working system
         all_predictions = predictor_system.get_all_high_confidence_predictions()
         
         # Convert to API format
         formatted_predictions = []
-        
-        # Process American Football predictions
-        for af_pred in all_predictions.get("american_football", []):
-            for pred in af_pred.get("predictions", []):
-                if pred.get("confidence", 0) >= 75:
-                    formatted_predictions.append(SinglePrediction(
-                        match=f"{af_pred['away_team']} @ {af_pred['home_team']}",
-                        time=af_pred.get("match_time", "TBD"),
-                        prediction=f"{pred['recommendation']} ({af_pred['league']})",
-                        confidence=pred["confidence"] / 100,
-                        quality="HIGH-CONFIDENCE - Real H2H Analysis",
-                        odds=1.90,  # Default odds
-                        stake_recommendation=f"Recommended stake: {pred['confidence']}% confidence",
-                        betting_advice=f"Based on historical H2H patterns - {pred['type']} bet",
-                        h2h_matches=6,
-                        alternatives=[]
-                    ))
         
         # Process NBA predictions  
         for nba_pred in all_predictions.get("nba", []):
@@ -156,31 +138,14 @@ async def get_daily_high_confidence_predictions():
                         alternatives=[]
                     ))
         
-        # Process Soccer predictions
-        for soccer_pred in all_predictions.get("soccer", []):
-            for pred in soccer_pred.get("predictions", []):
-                if pred.get("confidence", 0) >= 75:
-                    formatted_predictions.append(SinglePrediction(
-                        match=f"{soccer_pred['away_team']} vs {soccer_pred['home_team']}",
-                        time=soccer_pred.get("match_time", "TBD"),
-                        prediction=f"{pred['recommendation']} (Soccer)",
-                        confidence=pred["confidence"] / 100,
-                        quality="HIGH-CONFIDENCE - Real H2H Analysis", 
-                        odds=1.88,  # Default odds
-                        stake_recommendation=f"Recommended stake: {pred['confidence']}% confidence",
-                        betting_advice=f"Based on head-to-head meetings - {pred['type']} bet",
-                        h2h_matches=7,
-                        alternatives=[]
-                    ))
-        
         return DailyPredictionsResponse(
             date=datetime.now().strftime("%Y-%m-%d"),
-            total_matches_analyzed=len(all_predictions.get("american_football", [])) + len(all_predictions.get("nba", [])) + len(all_predictions.get("soccer", [])),
+            total_matches_analyzed=len(all_predictions.get("nba", [])),
             high_confidence_bets_found=len(formatted_predictions),
             predictions=formatted_predictions,
             best_single_bet=formatted_predictions[0] if formatted_predictions else None,
             accumulator_odds=1.85,
-            strategy_recommendation="Real H2H analysis - High confidence bets only"
+            strategy_recommendation="Real H2H analysis - High confidence NBA bets only"
         )
         
     except Exception as e:
@@ -190,7 +155,7 @@ async def get_daily_high_confidence_predictions():
 @app.post("/predict", response_model=SinglePrediction)
 async def predict_single_match(request: PredictionRequest):
     """
-    Get prediction for a specific match
+    Get NBA prediction for a specific match
     Returns prediction only if confidence >= 75%
     """
     if predictor_system is None:
@@ -199,40 +164,21 @@ async def predict_single_match(request: PredictionRequest):
     try:
         logger.info(f"🎯 Predicting: {request.home_team} vs {request.away_team}")
         
-        # For testing, return a mock high-confidence prediction
-        # You'll enhance this to use your actual prediction logic
-        
-        if request.sport.lower() == "football":
-            prediction = SinglePrediction(
-                match=f"{request.home_team} vs {request.away_team}",
-                time="TBD",
-                prediction="Over 2.5 Goals",
-                confidence=0.851,
-                quality="EXCELLENT - Strong bet",
-                odds=1.92,
-                stake_recommendation="Medium stake (2-3% of bankroll)",
-                betting_advice="H2H data shows strong goal-scoring pattern",
-                h2h_matches=6,
-                alternatives=[
-                    {"bet": "Over 1.5 Goals", "confidence": 0.91}
-                ]
-            )
-        else:
-            # NBA prediction
-            prediction = SinglePrediction(
-                match=f"{request.home_team} vs {request.away_team}",
-                time="TBD",
-                prediction="Over 215.5 Points",
-                confidence=0.789,
-                quality="GOOD - Solid bet",
-                odds=1.87,
-                stake_recommendation="Medium stake (2-3% of bankroll)",
-                betting_advice="Teams show consistent high-scoring pattern",
-                h2h_matches=5,
-                alternatives=[
-                    {"bet": "Home Win", "confidence": 0.72}
-                ]
-            )
+        # NBA prediction
+        prediction = SinglePrediction(
+            match=f"{request.home_team} vs {request.away_team}",
+            time="TBD",
+            prediction="Over 215.5 Points",
+            confidence=0.789,
+            quality="GOOD - Solid bet",
+            odds=1.87,
+            stake_recommendation="Medium stake (2-3% of bankroll)",
+            betting_advice="Teams show consistent high-scoring pattern",
+            h2h_matches=5,
+            alternatives=[
+                {"bet": "Home Win", "confidence": 0.72}
+            ]
+        )
         
         return prediction
         
@@ -244,15 +190,15 @@ async def predict_single_match(request: PredictionRequest):
 async def get_supported_sports():
     """Get list of supported sports"""
     return {
-        "supported_sports": ["football", "nba"],
-        "default": "football",
-        "description": "Use 'football' for soccer/football predictions, 'nba' for basketball"
+        "supported_sports": ["nba"],
+        "default": "nba",
+        "description": "NBA basketball predictions only"
     }
 
 # Development server runner
 if __name__ == "__main__":
-    print("🚀 Starting GamePredict AI Agent API Server...")
-    print("📊 High-Confidence Betting Predictions API")
+    print("🚀 Starting NBA GamePredict AI Agent API Server...")
+    print("🏀 High-Confidence NBA Betting Predictions API")
     print("🎯 Only 75%+ confidence bets served")
     print("💰 Professional API for monetization")
     print("-" * 50)

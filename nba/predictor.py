@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 import time
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add NBA module path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -28,15 +32,26 @@ try:
     from nba_betting_odds_api import NBABettingOddsAPI
     AGENTIC_AI_AVAILABLE = True
     print("🤖 NBA Agentic AI Enhancement loaded successfully!")
-except ImportError:
+except ImportError as e:
+    AGENTIC_AI_AVAILABLE = False
+    print(f"⚠️ NBA Agentic AI Enhancement not available: {e}")
     AGENTIC_AI_AVAILABLE = False
     print("⚠️ NBA Agentic AI Enhancement not available (OpenAI API key needed)")
+
+# Import Player Props Analyzer
+try:
+    from player_props_analyzer import NBAPlayerPropsAnalyzer
+    PLAYER_PROPS_AVAILABLE = True
+    print("🌟 NBA Player Props Analyzer loaded successfully!")
+except ImportError as e:
+    PLAYER_PROPS_AVAILABLE = False
+    print(f"⚠️ NBA Player Props Analyzer not available: {e}")
 
 class ReliableNBAPredictor:
     """Enhanced NBA predictor with H2H analysis and popular betting markets"""
     
-    def __init__(self, enable_agentic_ai: bool = True):
-        """Initialize with H2H analysis, popular betting focus, and Agentic AI"""
+    def __init__(self, enable_agentic_ai: bool = True, enable_player_props: bool = True):
+        """Initialize with H2H analysis, popular betting focus, Player Props, and Agentic AI"""
         
         self.espn_base = "http://site.api.espn.com/apis/site/v2/sports/basketball/nba"
         self.data_sources = ["ESPN API", "H2H Analysis", "Statistical Patterns"]
@@ -57,8 +72,20 @@ class ReliableNBAPredictor:
             self.nba_h2h_collector = None
             print(f"⚠️ NBA H2H collector initialization failed: {e}")
         
+        # Initialize Player Props Analyzer (Fastest growing market!)
+        self.player_props_enabled = enable_player_props and PLAYER_PROPS_AVAILABLE
+        self.player_props_analyzer = None
+        
+        if self.player_props_enabled:
+            try:
+                self.player_props_analyzer = NBAPlayerPropsAnalyzer()
+                print("🌟 NBA Player Props Analysis ENABLED (Fastest growing market!)")
+            except Exception as e:
+                print(f"⚠️ Player Props initialization failed: {e}")
+                self.player_props_enabled = False
+        
         # Popular NBA betting markets focus
-        self.popular_markets = ["OVER", "Halftime OVER", "Moneyline Win"]
+        self.popular_markets = ["Point Spread", "OVER/UNDER", "Moneyline Win", "Halftime OVER", "Player Props"]
         self.confidence_threshold = 0.75  # 75% minimum for high-confidence bets
         
         # Initialize Agentic AI Enhancement
@@ -77,8 +104,10 @@ class ReliableNBAPredictor:
         
         print("✅ Enhanced NBA Predictor with H2H Analysis + AI initialized")
         print("📡 Using ESPN API for real-time NBA data")
-        print("🎯 Focus: OVER bets, Halftime OVER, Win predictions")
+        print("🎯 Focus: Point Spread, Over/Under, Moneyline, Halftime, Player Props")
         print("📊 H2H Analysis: Same methodology as football system")
+        if self.player_props_enabled:
+            print("🌟 Player Props: ENABLED (Fastest growing market - stars analysis)")
         if self.agentic_ai_enabled:
             print("🤖 Agentic AI: GPT-4 contextual enhancement active")
         print("🎯 High-confidence only: 75%+ threshold for recommendations")
@@ -197,6 +226,19 @@ class ReliableNBAPredictor:
                 over_pct = over_games / total_h2h if total_h2h > 0 else 0.5
                 halftime_over_pct = halftime_over_games / total_h2h if total_h2h > 0 else 0.5
                 
+                # HYBRID: Apply GPT-4 validation adjustments if available
+                gpt_validation = h2h_games[0].get('gpt_validation', {}) if h2h_games else {}
+                
+                if gpt_validation.get('validated') and gpt_validation.get('adjustment_needed'):
+                    adjustment = gpt_validation.get('gpt_assessment', {}).get('recommended_adjustment')
+                    
+                    if adjustment == 'favor_home':
+                        print(f"   🤖 GPT-4 Adjustment: Favoring {home_team} based on historical context")
+                        home_win_pct = min(0.85, home_win_pct + 0.15)  # Boost home by 15%
+                    elif adjustment == 'favor_away':
+                        print(f"   🤖 GPT-4 Adjustment: Favoring {away_team} based on historical context")
+                        home_win_pct = max(0.15, home_win_pct - 0.15)  # Boost away by 15%
+                
                 return {
                     "sufficient_data": True,
                     "h2h_games_count": total_h2h,
@@ -211,7 +253,8 @@ class ReliableNBAPredictor:
                     "halftime_over_percentage": halftime_over_pct,
                     "total_points_history": total_points_history,
                     "h2h_pattern": self._analyze_h2h_pattern(home_wins, away_wins, over_pct),
-                    "confidence_factors": self._calculate_h2h_confidence(total_h2h, home_win_pct, over_pct)
+                    "confidence_factors": self._calculate_h2h_confidence(total_h2h, home_win_pct, over_pct),
+                    "gpt_validation": gpt_validation  # Include validation results
                 }
             else:
                 return {
@@ -225,77 +268,41 @@ class ReliableNBAPredictor:
             return {"sufficient_data": False, "reason": "API error"}
     
     def _generate_h2h_sample(self, home_team: str, away_team: str) -> List[Dict]:
-        """Get real NBA H2H data using ESPN API (replaces simulated data)"""
+        """Get real NBA H2H data using ESPN API - REAL DATA ONLY + GPT-4 VALIDATION"""
         
         if self.nba_h2h_collector:
             try:
-                # Get real historical matchup data
+                # Get real historical matchup data from ESPN API
                 h2h_games = self.nba_h2h_collector.get_team_h2h_data(home_team, away_team)
                 
                 if h2h_games and len(h2h_games) >= 4:  # NBA teams play 2-4 times per season
                     print(f"✅ Using {len(h2h_games)} real NBA H2H games: {home_team} vs {away_team}")
+                    
+                    # HYBRID: Validate with GPT-4 if AI is available
+                    if self.ai_enhancer and self.agentic_ai_enabled:
+                        validation = self.ai_enhancer.validate_h2h_data_with_gpt(home_team, away_team, h2h_games)
+                        
+                        if validation.get('validated'):
+                            print(f"   🤖 GPT-4 Validation: {validation.get('gpt_assessment', {}).get('validation', 'N/A')}")
+                            print(f"   💡 Key Insight: {validation.get('key_insight', 'N/A')}")
+                            
+                            # Store validation in games data for use in predictions
+                            for game in h2h_games:
+                                game['gpt_validation'] = validation
+                    
                     return h2h_games
                 else:
-                    print(f"⚠️  Insufficient real NBA H2H data ({len(h2h_games)} games), using fallback")
+                    print(f"❌ Insufficient real NBA H2H data ({len(h2h_games) if h2h_games else 0} games) - SKIPPING GAME")
+                    return []
                     
             except Exception as e:
-                print(f"❌ NBA H2H collector error: {e}")
-        
-        # Fallback: Use realistic NBA patterns (better than pure random)
-        print(f"📊 Using realistic NBA H2H patterns for {home_team} vs {away_team}")
-        return self._get_realistic_nba_h2h_fallback(home_team, away_team)
+                print(f"❌ NBA H2H collector error: {e} - SKIPPING GAME")
+                return []
+        else:
+            print(f"❌ NBA H2H collector not available - SKIPPING GAME")
+            return []
     
-    def _get_realistic_nba_h2h_fallback(self, home_team: str, away_team: str) -> List[Dict]:
-        """Realistic NBA H2H fallback based on team characteristics"""
-        
-        # High-scoring teams tend to have higher totals in H2H
-        high_scoring_teams = [
-            "Boston Celtics", "Sacramento Kings", "Phoenix Suns", "Golden State Warriors",
-            "Los Angeles Lakers", "Dallas Mavericks", "Atlanta Hawks", "Oklahoma City Thunder"
-        ]
-        
-        # Get realistic NBA betting total for this matchup
-        realistic_total = self._get_realistic_nba_betting_total(home_team, away_team)
-        
-        # Adjust for team characteristics
-        if home_team in high_scoring_teams or away_team in high_scoring_teams:
-            realistic_total += 5  # High-scoring teams boost totals
-        
-        # Generate 6-10 recent H2H games (NBA teams play more frequently)
-        import random
-        random.seed(hash(home_team + away_team) % 1000)  # Consistent results
-        
-        num_games = random.randint(6, 10)
-        h2h_games = []
-        
-        for i in range(num_games):
-            # Vary total points around realistic betting line (less variance than random)
-            total_points = realistic_total + random.randint(-8, +10)
-            halftime_total = int(total_points * random.uniform(0.46, 0.50))  # 46-50% first half
-            
-            # Realistic score distribution
-            home_score = random.randint(int(total_points * 0.45), int(total_points * 0.55))
-            away_score = total_points - home_score
-            
-            # Determine winner (slight home advantage)
-            winner = home_team if home_score > away_score else away_team
-            
-            # Recent dates (NBA seasons)
-            days_ago = random.randint(30, 500)  # Last ~1.5 years
-            from datetime import datetime, timedelta
-            game_date = (datetime.now() - timedelta(days=days_ago)).strftime('%Y-%m-%d')
-            
-            h2h_games.append({
-                "total_points": total_points,
-                "home_score": home_score,
-                "away_score": away_score,
-                "halftime_total": halftime_total,
-                "winner": winner,
-                "date": game_date,
-                "source": "REALISTIC_NBA_FALLBACK"
-            })
-        
-        return sorted(h2h_games, key=lambda x: x['date'], reverse=True)
+
     
     def _analyze_h2h_pattern(self, home_wins: int, away_wins: int, over_pct: float) -> str:
         """Analyze H2H patterns for betting insights"""
@@ -335,6 +342,111 @@ class ReliableNBAPredictor:
             "over_prediction_confidence": over_confidence,
             "games_analyzed": games_count
         }
+    
+    def _calculate_point_spread(self, home_team: str, away_team: str, h2h_analysis: Dict, 
+                                prediction_factors: Dict, home_win_prob: float) -> Dict:
+        """Calculate point spread prediction (Most popular NBA bet in USA)"""
+        
+        # Extract H2H margin data if available
+        h2h_games = h2h_analysis.get('h2h_games_count', 0)
+        
+        # Calculate expected margin from H2H data and statistical analysis
+        # Method 1: From win probabilities (converted to point spread)
+        prob_based_spread = (home_win_prob - 0.5) * 20  # NBA typical conversion
+        
+        # Method 2: From team strength differential
+        strength_diff = prediction_factors.get('team_strength_diff', 0)
+        strength_based_spread = strength_diff * 25  # Convert strength to points
+        
+        # Method 3: Home court advantage (typically 3-4 points in NBA)
+        home_court_points = 3.5
+        
+        # Combine methods (60% probability-based, 30% strength, 10% home court)
+        predicted_spread = (prob_based_spread * 0.60) + (strength_based_spread * 0.30) + (home_court_points * 0.10)
+        
+        # Round to typical spread increments (0.5, 1, 1.5, etc.)
+        predicted_spread = round(predicted_spread * 2) / 2  # Round to nearest 0.5
+        
+        # Generate market spread estimate (usually slightly different from true value)
+        market_spread = predicted_spread - 0.5  # Market typically shades slightly
+        market_spread = round(market_spread * 2) / 2
+        
+        # Calculate spread confidence
+        # Higher confidence when:
+        # - Win probability is clear (>65% or <35%)
+        # - H2H data supports the margin
+        # - Team strength differential is significant
+        
+        win_prob_clarity = abs(home_win_prob - 0.5) * 2  # 0 to 1 scale
+        h2h_confidence = min(1.0, h2h_games / 8)  # More games = higher confidence
+        strength_clarity = min(1.0, abs(strength_diff) * 5)  # Clear strength diff
+        
+        spread_confidence = (win_prob_clarity * 0.5) + (h2h_confidence * 0.3) + (strength_clarity * 0.2)
+        
+        # Determine recommendation
+        if abs(predicted_spread - market_spread) >= 2.0:
+            # Strong edge - 2+ point difference
+            if predicted_spread > market_spread:
+                recommendation = f"{home_team} +{abs(market_spread)} (Value)"
+                edge_direction = "home"
+            else:
+                recommendation = f"{away_team} +{abs(market_spread)} (Value)"
+                edge_direction = "away"
+            edge_strength = "Strong"
+        elif abs(predicted_spread - market_spread) >= 1.0:
+            # Moderate edge
+            if predicted_spread > market_spread:
+                recommendation = f"{home_team} {market_spread:+.1f}"
+                edge_direction = "home"
+            else:
+                recommendation = f"{away_team} +{abs(market_spread)}"
+                edge_direction = "away"
+            edge_strength = "Moderate"
+        else:
+            # No clear edge
+            recommendation = f"No strong spread value (line around {market_spread:+.1f})"
+            edge_direction = "none"
+            edge_strength = "Weak"
+        
+        return {
+            "predicted_spread": predicted_spread,
+            "market_spread": market_spread,
+            "home_team_spread": f"{home_team} {-predicted_spread:+.1f}",
+            "away_team_spread": f"{away_team} {predicted_spread:+.1f}",
+            "spread_confidence": round(spread_confidence, 3),
+            "recommendation": recommendation,
+            "edge_direction": edge_direction,
+            "edge_strength": edge_strength,
+            "edge_points": round(abs(predicted_spread - market_spread), 1),
+            "betting_advice": self._generate_spread_advice(predicted_spread, market_spread, 
+                                                           home_team, away_team, spread_confidence)
+        }
+    
+    def _generate_spread_advice(self, predicted_spread: float, market_spread: float, 
+                                home_team: str, away_team: str, confidence: float) -> str:
+        """Generate practical spread betting advice"""
+        
+        edge = predicted_spread - market_spread
+        
+        if confidence >= 0.75:
+            confidence_text = "High confidence"
+        elif confidence >= 0.60:
+            confidence_text = "Moderate confidence"
+        else:
+            confidence_text = "Low confidence"
+        
+        if abs(edge) >= 2.0:
+            if edge > 0:
+                return f"{confidence_text} - {home_team} undervalued by ~{abs(edge):.1f} points"
+            else:
+                return f"{confidence_text} - {away_team} undervalued by ~{abs(edge):.1f} points"
+        elif abs(edge) >= 1.0:
+            if edge > 0:
+                return f"{confidence_text} - Lean {home_team} on spread"
+            else:
+                return f"{confidence_text} - Lean {away_team} on spread"
+        else:
+            return f"Spread fairly priced - no strong edge ({confidence_text})"
     
     def predict_game_with_h2h_focus(self, game: Dict) -> Dict:
         """Generate H2H-based prediction focusing on popular NBA betting markets"""
@@ -390,13 +502,19 @@ class ReliableNBAPredictor:
         predicted_halftime_total = predicted_total * 0.48
         halftime_over_prob = h2h_halftime_over_prob
         
+        # POINT SPREAD calculation (Most popular NBA bet in USA)
+        spread_prediction = self._calculate_point_spread(home_team, away_team, h2h_analysis, 
+                                                         prediction_factors, home_win_prob)
+        spread_confidence = spread_prediction['spread_confidence']
+        
         # Generate popular betting recommendations with confidence levels
         all_bets = [
+            spread_prediction['recommendation'],  # Point Spread (MOST POPULAR)
             f"OVER {predicted_total:.1f} points" if over_prob > 0.6 else f"UNDER {predicted_total:.1f} points",
             f"{home_team if home_win_prob > 0.6 else away_team} to Win" if max(home_win_prob, away_win_prob) > 0.6 else "No strong pick",
             f"Halftime OVER {predicted_halftime_total:.1f}" if halftime_over_prob > 0.6 else "Halftime UNDER"
         ]
-        all_confidence_levels = [over_prob, max(home_win_prob, away_win_prob), halftime_over_prob]
+        all_confidence_levels = [spread_confidence, over_prob, max(home_win_prob, away_win_prob), halftime_over_prob]
         
         # Filter for HIGH CONFIDENCE ONLY (75%+ as per strategy)
         high_confidence_bets = []
@@ -433,13 +551,23 @@ class ReliableNBAPredictor:
             
             # POPULAR BETTING MARKETS (What people actually bet on)
             
-            # 1. MONEYLINE WIN (Most popular)
+            # 1. POINT SPREAD (MOST POPULAR NBA BET IN USA)
+            "predicted_spread": spread_prediction['predicted_spread'],
+            "market_spread": spread_prediction['market_spread'],
+            "home_team_spread": spread_prediction['home_team_spread'],
+            "away_team_spread": spread_prediction['away_team_spread'],
+            "spread_confidence": spread_prediction['spread_confidence'],
+            "spread_recommendation": spread_prediction['recommendation'],
+            "spread_edge": spread_prediction['edge_points'],
+            "spread_betting_advice": spread_prediction['betting_advice'],
+            
+            # 2. MONEYLINE WIN
             "predicted_winner": home_team if home_win_prob > away_win_prob else away_team,
             "home_win_probability": round(home_win_prob, 3),
             "away_win_probability": round(away_win_prob, 3),
             "winner_confidence": round(max(home_win_prob, away_win_prob), 3),
             
-            # 2. OVER/UNDER TOTAL (Very popular)
+            # 3. OVER/UNDER TOTAL (Very popular)
             "predicted_total": round(predicted_total, 1),
             "market_total_estimate": round(market_total, 1),
             "over_probability": round(over_prob, 3),
@@ -447,7 +575,7 @@ class ReliableNBAPredictor:
             "over_under_recommendation": "OVER" if over_prob > under_prob else "UNDER",
             "ou_confidence": round(max(over_prob, under_prob), 3),
             
-            # 3. HALFTIME OVER (Popular NBA market)
+            # 4. HALFTIME OVER (Popular NBA market)
             "predicted_halftime_total": round(predicted_halftime_total, 1),
             "market_halftime_estimate": round(market_halftime_total, 1),
             "halftime_over_probability": round(halftime_over_prob, 3),
@@ -618,6 +746,8 @@ class ReliableNBAPredictor:
         print(f"📊 Data: ESPN API + Statistical Analysis")
         if self.agentic_ai_enabled:
             print("🤖 Enhancement: Agentic AI with GPT-4 contextual analysis")
+        if self.player_props_enabled:
+            print("🌟 Player Props: Analyzing star players (LeBron, Curry, Jokic, etc.)")
         print()
         
         # Get today's games
@@ -644,25 +774,40 @@ class ReliableNBAPredictor:
             
             # Generate prediction
             prediction = self.predict_game_with_h2h_focus(game)
+            
+            # Check if prediction was made with real data
+            if not prediction.get('prediction_made', True):
+                print(f"   ❌ SKIPPED - {prediction.get('reason', 'No real H2H data available')}")
+                print(f"   📊 H2H Games Found: {prediction.get('h2h_games_count', 0)} (Minimum Required: {prediction.get('requires_minimum', 3)})")
+                print(f"\n   {'='*50}\n")
+                continue
+            
             predictions.append(prediction)
             
             # Display prediction
-            print(f"\n   🏆 WINNER PREDICTION:")
+            print(f"\n   � POINT SPREAD (MOST POPULAR):")
+            print(f"   {prediction['spread_recommendation']}")
+            print(f"   Predicted: {prediction['home_team_spread']} / {prediction['away_team_spread']}")
+            print(f"   Market: {prediction['home_team'].split()[0]} {prediction['market_spread']:+.1f}")
+            print(f"   Confidence: {prediction['spread_confidence']:.1%}")
+            print(f"   {prediction['spread_betting_advice']}")
+            
+            print(f"\n   🏆 MONEYLINE (WINNER):")
             print(f"   {prediction['predicted_winner']} ({prediction['winner_confidence']:.1%} confidence)")
             print(f"   Home: {prediction['home_win_probability']:.1%} | Away: {prediction['away_win_probability']:.1%}")
             
-            print(f"\n   📊 TOTAL POINTS PREDICTION:")
+            print(f"\n   📊 OVER/UNDER TOTAL:")
             print(f"   Predicted: {prediction['predicted_total']} points")
             print(f"   Market Est: {prediction.get('market_total_estimate', 'N/A')} points")
-            print(f"   H2H Average: {prediction.get('h2h_average_total', 'N/A')} points")
-            
-            print(f"\n   🎲 OVER/UNDER RECOMMENDATION:")
             print(f"   Play: {prediction.get('over_under_recommendation', 'OVER')} ({prediction['over_probability']:.1%} confidence)")
-            print(f"   Over: {prediction['over_probability']:.1%} | Under: {prediction['under_probability']:.1%}")
+            
+            print(f"\n   ⏱️ HALFTIME OVER/UNDER:")
+            print(f"   Predicted: {prediction['predicted_halftime_total']} points")
+            print(f"   Confidence: {prediction['halftime_over_confidence']:.1%}")
             
             print(f"\n   💰 BETTING ADVICE:")
             print(f"   {prediction['betting_advice']}")
-            print(f"   Confidence: {prediction['confidence_assessment']}")
+            print(f"   Overall Assessment: {prediction['confidence_assessment']}")
             
             print(f"\n   🔍 HIGH-CONFIDENCE BETS (75%+ ONLY):")
             if prediction['high_confidence_bets']:
@@ -672,6 +817,36 @@ class ReliableNBAPredictor:
             else:
                 print(f"   • No bets meet 75% confidence threshold")
                 print(f"   • Recommended: Wait for better opportunities")
+            
+            # PLAYER PROPS (if enabled)
+            if self.player_props_enabled and self.player_props_analyzer:
+                try:
+                    player_props = self.player_props_analyzer.get_star_players_props(
+                        game['home_team'], 
+                        game['away_team'],
+                        game['home_team_id'],
+                        game['away_team_id']
+                    )
+                    
+                    if player_props:
+                        print(f"\n   🌟 STAR PLAYER PROPS (Fastest Growing Market):")
+                        print(f"   " + "-" * 50)
+                        for props in player_props:
+                            if props.get('high_confidence_props'):
+                                print(f"   {props['player_name']}:")
+                                
+                                # Show all individual prop predictions (Points, Rebounds, Assists)
+                                for prop_type in ['POINTS', 'REBOUNDS', 'ASSISTS', 'PRA']:
+                                    matching_prop = [p for p in props['high_confidence_props'] if p['type'] == prop_type]
+                                    if matching_prop:
+                                        prop = matching_prop[0]
+                                        print(f"      • {prop['type']}: {prop['recommendation']} ({prop['confidence']:.1%})")
+                        
+                        # Add to prediction object
+                        prediction['player_props'] = player_props
+                        prediction['player_props_count'] = len(player_props)
+                except Exception as e:
+                    print(f"   ⚠️ Player props analysis error: {e}")
             
             print(f"\n   {'='*50}")
             print()
@@ -759,7 +934,7 @@ def main():
     
     if predictions:
         print("🚀 High-confidence NBA predictions generated successfully!")
-        print("💡 Popular markets analyzed: OVER bets, Halftime OVER, Moneyline wins")
+        print("💡 Popular markets analyzed: Point Spread, Over/Under, Moneyline, Halftime, Player Props")
         print("📊 H2H analysis ensures quality predictions only")
         print("⚠️ Always bet responsibly and within your means")
     else:

@@ -1,69 +1,36 @@
-# 🏆 Multi-Sport AI Prediction System Dependencies# 🏀 Reliable NBA Predictor - Clean Dependencies# 🤖 Autonomous AI Sports Prediction Agent Dependencies
-
-# Football/Soccer (LiveScore API) + NBA (ESPN API) + ML Models
-
-# Simple, reliable NBA predictions using ESPN API# Python 3.13.5 - Multi-Sport Intelligence System
+# � NBA GamePredict AI Agent - Dependencies
+# Python 3.13.5 - AI Sports Prediction System
 
 # 🚀 Core API Framework
-
 fastapi==0.116.1                    # High-performance async web framework
-
 uvicorn==0.35.0                     # ASGI server for production deployment
+pydantic==2.11.9                    # Data validation and serialization
+pydantic-core==2.33.2               # Pydantic core performance engine
+starlette==0.47.3                   # FastAPI underlying framework
 
-pydantic==2.11.9                    # Data validation and serialization# Core dependency for API communication# 🚀 Core API Framework (Production-Ready)
+# 🤖 Machine Learning & Data Science
+scikit-learn==1.7.2                 # ML models (RandomForest, classification)
+xgboost==3.0.5                      # Advanced gradient boosting algorithms
+pandas==2.3.2                       # Data manipulation and analysis
+numpy==2.3.3                        # Numerical computing foundation
+scipy==1.16.2                       # Scientific computing and statistics
+joblib==1.5.2                       # ML model persistence and parallel processing
 
+# 📡 HTTP & API Communication
+requests==2.32.5                    # HTTP client for ESPN APIs
+urllib3==2.5.0                      # Advanced HTTP client library
+certifi==2025.8.3                   # SSL certificate verification
+charset-normalizer==3.4.3           # Unicode text normalization
 
+# 🔧 Environment & System Management
+python-dotenv==1.1.1                # Environment variable management
+click==8.2.1                        # Command-line interface support
+colorama==0.4.6                     # Colored terminal output
 
-# 🤖 Machine Learning & Data Science (Football Predictions)requests>=2.32.0                   # HTTP client for ESPN API callsfastapi==0.116.1                    # High-performance async web framework
-
-scikit-learn==1.7.2                # ML models (RandomForest, classification)
-
-pandas==2.3.2                      # Data manipulation and analysisuvicorn==0.35.0                     # ASGI server for production deployment
-
-numpy==2.3.3                       # Numerical computing foundation
-
-joblib==1.5.2                      # ML model persistence# Optional: For enhanced terminal outputstarlette==0.47.3                   # FastAPI underlying framework
-
-
-
-# 📡 HTTP & API Communication (LiveScore + ESPN APIs)colorama>=0.4.6                    # Colored terminal output (optional)pydantic==2.11.9                    # Data validation and serialization
-
-requests==2.32.5                   # HTTP client for both APIspydantic-core==2.33.2              # Pydantic core performance engine
-
-urllib3==2.5.0                     # Advanced HTTP client library
-
-certifi==2025.8.3                  # SSL certificate verification# 🤖 Machine Learning & Data Science (AI Intelligence)
-
-scikit-learn==1.7.2                # ML models (RandomForest, classification)
-
-# 🔧 Environment Managementxgboost==3.0.5                     # Advanced gradient boosting algorithms
-
-python-dotenv==1.1.1               # Environment variable management for API keyspandas==2.3.2                      # Data manipulation and analysis
-
-colorama==0.4.6                    # Colored terminal outputnumpy==2.3.3                       # Numerical computing foundation
-
-scipy==1.16.2                      # Scientific computing and statistics
-
-# 📅 Date/Time Handling (Multi-timezone sports)joblib==1.5.2                      # ML model persistence and parallel processing
-
-python-dateutil==2.9.0.post0       # Advanced date/time parsing
-
-pytz==2025.2                       # Timezone handling for global sports# 📡 HTTP & API Communication (Real-Time Data)
-requests==2.32.5                   # HTTP client for Live Score & ESPN APIs
-urllib3==2.5.0                     # Advanced HTTP client library
-certifi==2025.8.3                  # SSL certificate verification
-charset-normalizer==3.4.3          # Unicode text normalization
-
-# 🔧 System & Environment Management
-python-dotenv==1.1.1               # Environment variable management
-click==8.2.1                       # Command-line interface support
-
-# � Environment & Security (Autonomous Operations)
-python-dotenv==1.1.1               # Environment variable management
-click==8.2.1                       # Command-line interface support
-python-dateutil==2.9.0.post0       # Advanced date/time parsing
-pytz==2025.2                       # Timezone handling for global sports
-tzdata==2025.2                     # Comprehensive timezone database
+# 📅 Date/Time Handling
+python-dateutil==2.9.0.post0        # Advanced date/time parsing
+pytz==2025.2                        # Timezone handling for global sports
+tzdata==2025.2                      # Comprehensive timezone database
 
 # 🌐 Web Scraping & Advanced Data Collection (Comprehensive H2H Intelligence)
 beautifulsoup4==4.13.5             # HTML/XML parsing for Land of Basketball H2H data

@@ -10,7 +10,7 @@ Adds intelligent contextual analysis to NBA betting predictions:
 - Team chemistry factors
 """
 
-import openai
+from openai import OpenAI
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -20,12 +20,25 @@ class NBAAugenticAIEnhancer:
     """
     NBA-specific Agentic AI system for enhanced predictions
     Same proven approach as football system, adapted for NBA
+    HYBRID APPROACH: ESPN API data + GPT-4 validation and context
     """
     
     def __init__(self, openai_api_key: str = None):
         """Initialize NBA Agentic AI enhancer"""
-        if openai_api_key:
-            openai.api_key = openai_api_key
+        self.client = None
+        
+        if openai_api_key and openai_api_key != "your_new_key_here":
+            try:
+                self.client = OpenAI(api_key=openai_api_key)
+                print("🤖 NBA Agentic AI Enhancement initialized")
+                print("🏀 Context sources: Injuries, Rest, Playoffs, Chemistry")
+                print("📊 Hybrid: ESPN API H2H + GPT-4 Validation + Context")
+            except Exception as e:
+                print(f"⚠️ OpenAI client initialization failed: {e}")
+                self.client = None
+        else:
+            print("⚠️ No valid OpenAI API key provided")
+            self.client = None
         
         self.nba_context_sources = {
             'injury_reports': True,
@@ -35,12 +48,9 @@ class NBAAugenticAIEnhancer:
             'team_chemistry': True,
             'travel_fatigue': True,
             'recent_trades': True,
-            'home_court_advantage': True
+            'home_court_advantage': True,
+            'h2h_validation': True  # NEW: Validate ESPN API H2H data
         }
-        
-        print("🤖 NBA Agentic AI Enhancement initialized")
-        print("🏀 Context sources: Injuries, Rest, Playoffs, Chemistry")
-        print("📊 Same H2H-centric approach as football (80% H2H + 20% AI)")
     
     def enhance_nba_prediction(self, game_data: Dict, base_prediction: Dict) -> Dict:
         """
@@ -57,7 +67,7 @@ class NBAAugenticAIEnhancer:
         # 1. Gather NBA-specific context
         nba_context = self._gather_nba_context(game_data)
         
-        # 2. GPT-4 NBA analysis
+        # 2. GPT-4 NBA analysis with H2H validation
         ai_analysis = self._gpt_analyze_nba_game(game_data, base_prediction, nba_context)
         
         # 3. H2H-centric combination (80% H2H + 20% AI)
@@ -73,8 +83,105 @@ class NBAAugenticAIEnhancer:
             'ai_confidence_adjustment': ai_analysis.get('confidence_adjustment', 0),
             'final_ai_confidence': enhanced_prediction['confidence'],
             'nba_betting_narrative': reasoning['detailed_explanation'],
-            'enhancement_type': 'NBA_AGENTIC_AI'
+            'h2h_validation': ai_analysis.get('h2h_validation', {}),
+            'enhancement_type': 'NBA_HYBRID_AI_H2H'
         }
+    
+    def validate_h2h_data_with_gpt(self, home_team: str, away_team: str, h2h_data: List[Dict]) -> Dict:
+        """
+        HYBRID APPROACH: Validate ESPN API H2H data with GPT-4 knowledge
+        
+        Args:
+            home_team: Home team name
+            away_team: Away team name
+            h2h_data: ESPN API H2H game results
+            
+        Returns:
+            Validation results with GPT-4 insights
+        """
+        
+        if not self.client:
+            return {
+                'validated': False,
+                'reason': 'No GPT-4 client available',
+                'use_api_data': True
+            }
+        
+        try:
+            # Calculate stats from ESPN API data
+            total_games = len(h2h_data)
+            home_wins = sum(1 for g in h2h_data if g.get('winner') == home_team)
+            away_wins = total_games - home_wins
+            avg_total = sum(g.get('total_points', 0) for g in h2h_data) / total_games if total_games > 0 else 0
+            
+            # Ask GPT-4 to validate
+            prompt = f"""You are an NBA analytics expert. Validate this head-to-head data:
+
+**Matchup:** {home_team} vs {away_team}
+**ESPN API Data:** {total_games} games
+- {home_team} wins: {home_wins}
+- {away_team} wins: {away_wins}
+- Average total points: {avg_total:.1f}
+
+**Questions:**
+1. Based on your knowledge of NBA history, does this win-loss record seem accurate for this matchup?
+2. What is the historical trend (all-time and recent 2-3 years)?
+3. Are there any major context factors (recent roster changes, coaching, injuries) affecting this matchup?
+4. Should we trust this ESPN data, or adjust based on historical knowledge?
+
+Respond in JSON format:
+{{
+    "validation": "accurate" or "questionable" or "incorrect",
+    "historical_context": "brief explanation",
+    "recommended_adjustment": "use_api_data" or "favor_home" or "favor_away",
+    "confidence": 0-100,
+    "key_insight": "one sentence insight"
+}}"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o",  # Latest GPT-4 Omni - faster, smarter, better
+                messages=[
+                    {"role": "system", "content": "You are an expert NBA analyst with deep knowledge of team matchup histories and trends."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+            
+            # Parse GPT response
+            gpt_response = response.choices[0].message.content
+            
+            # Try to extract JSON
+            import re
+            json_match = re.search(r'\{.*\}', gpt_response, re.DOTALL)
+            if json_match:
+                validation_result = json.loads(json_match.group())
+            else:
+                validation_result = {
+                    "validation": "questionable",
+                    "historical_context": gpt_response,
+                    "recommended_adjustment": "use_api_data",
+                    "confidence": 50,
+                    "key_insight": "Could not parse structured response"
+                }
+            
+            return {
+                'validated': True,
+                'gpt_assessment': validation_result,
+                'api_data_trustworthy': validation_result.get('validation') == 'accurate',
+                'adjustment_needed': validation_result.get('recommended_adjustment') != 'use_api_data',
+                'historical_context': validation_result.get('historical_context'),
+                'key_insight': validation_result.get('key_insight'),
+                'confidence': validation_result.get('confidence', 50) / 100
+            }
+            
+        except Exception as e:
+            print(f"⚠️ GPT-4 H2H validation error: {e}")
+            return {
+                'validated': False,
+                'reason': str(e),
+                'use_api_data': True
+            }
     
     def _gather_nba_context(self, game_data: Dict) -> Dict:
         """
