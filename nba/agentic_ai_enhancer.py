@@ -201,15 +201,171 @@ Respond in JSON format:
         return context
     
     def _assess_nba_injuries(self, game_data: Dict) -> Dict:
-        """NBA-specific injury impact analysis"""
-        return {
-            'key_players_out': [],
-            'probable_players': [],
-            'impact_on_pace': 'neutral',
-            'impact_on_defense': 'neutral',
-            'total_points_impact': 0,
-            'confidence_impact': 0
+        """NBA-specific injury impact analysis with real ESPN data"""
+        try:
+            home_team = game_data.get('home_team', '')
+            away_team = game_data.get('away_team', '')
+            
+            # Fetch real injury data from ESPN
+            home_injuries = self._fetch_team_injuries(home_team)
+            away_injuries = self._fetch_team_injuries(away_team)
+            
+            # Assess impact
+            home_impact = self._calculate_injury_impact(home_injuries)
+            away_impact = self._calculate_injury_impact(away_injuries)
+            
+            # Calculate net impact on prediction
+            net_impact = away_impact['total_impact'] - home_impact['total_impact']
+            confidence_adjustment = abs(net_impact) * -0.1  # Reduce confidence if major injuries
+            
+            return {
+                'home_team_injuries': home_injuries,
+                'away_team_injuries': away_injuries,
+                'home_impact_score': home_impact['total_impact'],
+                'away_impact_score': away_impact['total_impact'],
+                'net_advantage': 'home' if net_impact < 0 else 'away' if net_impact > 0 else 'neutral',
+                'key_players_out': home_impact['key_players'] + away_impact['key_players'],
+                'total_points_impact': net_impact * -5,  # Each impact point = ~5 points
+                'confidence_impact': confidence_adjustment,
+                'injury_summary': self._generate_injury_summary(home_injuries, away_injuries, home_team, away_team)
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Injury assessment error: {e}")
+            return {
+                'key_players_out': [],
+                'probable_players': [],
+                'impact_on_pace': 'neutral',
+                'impact_on_defense': 'neutral',
+                'total_points_impact': 0,
+                'confidence_impact': 0,
+                'error': str(e)
+            }
+    
+    def _fetch_team_injuries(self, team_name: str) -> List[Dict]:
+        """Fetch real injury data from ESPN API"""
+        try:
+            # ESPN injury report endpoint
+            # Note: This is a simplified version - ESPN's actual endpoint may vary
+            team_abbr = self._get_team_abbreviation(team_name)
+            
+            # Try ESPN scoreboard API which includes injury info
+            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_abbr}/injuries"
+            
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                injuries = []
+                
+                # Parse injury data
+                if 'injuries' in data:
+                    for injury in data['injuries']:
+                        injuries.append({
+                            'player': injury.get('athlete', {}).get('displayName', 'Unknown'),
+                            'status': injury.get('status', 'Unknown'),
+                            'type': injury.get('type', 'Unknown'),
+                            'details': injury.get('details', {}).get('detail', ''),
+                            'position': injury.get('athlete', {}).get('position', {}).get('abbreviation', '')
+                        })
+                
+                return injuries
+            else:
+                # Fallback: No injury data available
+                return []
+                
+        except Exception as e:
+            print(f"⚠️ Could not fetch injuries for {team_name}: {e}")
+            return []
+    
+    def _calculate_injury_impact(self, injuries: List[Dict]) -> Dict:
+        """Calculate impact score of injuries"""
+        if not injuries:
+            return {'total_impact': 0, 'key_players': []}
+        
+        impact_score = 0
+        key_players_out = []
+        
+        # Impact weights by status
+        status_weights = {
+            'OUT': 3.0,      # Definitely out - major impact
+            'DOUBTFUL': 2.0, # Likely out - significant impact
+            'QUESTIONABLE': 1.0,  # Maybe out - moderate impact
+            'PROBABLE': 0.3, # Likely plays - minor impact
+            'DAY_TO_DAY': 0.5
         }
+        
+        # Position importance (for NBA)
+        position_weights = {
+            'PG': 1.2,  # Point guard - high impact
+            'SG': 1.0,  # Shooting guard
+            'SF': 1.0,  # Small forward
+            'PF': 1.0,  # Power forward
+            'C': 1.1    # Center - high impact
+        }
+        
+        for injury in injuries:
+            status = injury.get('status', '').upper()
+            position = injury.get('position', 'SG')
+            player = injury.get('player', 'Unknown')
+            
+            # Calculate impact
+            status_weight = status_weights.get(status, 0.5)
+            position_weight = position_weights.get(position, 1.0)
+            
+            player_impact = status_weight * position_weight
+            impact_score += player_impact
+            
+            # Track key players (OUT or DOUBTFUL)
+            if status in ['OUT', 'DOUBTFUL']:
+                key_players_out.append({
+                    'name': player,
+                    'position': position,
+                    'status': status,
+                    'impact': player_impact
+                })
+        
+        return {
+            'total_impact': impact_score,
+            'key_players': key_players_out,
+            'injury_count': len(injuries)
+        }
+    
+    def _generate_injury_summary(self, home_injuries: List, away_injuries: List, 
+                                 home_team: str, away_team: str) -> str:
+        """Generate human-readable injury summary"""
+        summary_parts = []
+        
+        if not home_injuries and not away_injuries:
+            return "No significant injuries reported for either team"
+        
+        if home_injuries:
+            out_players = [inj['player'] for inj in home_injuries if inj.get('status', '').upper() == 'OUT']
+            if out_players:
+                summary_parts.append(f"{home_team}: {', '.join(out_players)} OUT")
+        
+        if away_injuries:
+            out_players = [inj['player'] for inj in away_injuries if inj.get('status', '').upper() == 'OUT']
+            if out_players:
+                summary_parts.append(f"{away_team}: {', '.join(out_players)} OUT")
+        
+        return " | ".join(summary_parts) if summary_parts else "Minor injuries only"
+    
+    def _get_team_abbreviation(self, team_name: str) -> str:
+        """Convert team name to ESPN abbreviation"""
+        team_abbr_map = {
+            'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN',
+            'Charlotte Hornets': 'CHA', 'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE',
+            'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN', 'Detroit Pistons': 'DET',
+            'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+            'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL', 'Memphis Grizzlies': 'MEM',
+            'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+            'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+            'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX',
+            'Portland Trail Blazers': 'POR', 'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS',
+            'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA', 'Washington Wizards': 'WAS'
+        }
+        
+        return team_abbr_map.get(team_name, 'UNK')
     
     def _analyze_rest_patterns(self, game_data: Dict) -> Dict:
         """Analyze rest/fatigue patterns"""
@@ -371,12 +527,224 @@ This combines proven H2H methodology with real-time NBA intelligence for enhance
         }
     
     def _analyze_recent_performance(self, game_data: Dict) -> Dict:
-        """Analyze recent team momentum"""
+        """Analyze recent team momentum with real data"""
+        try:
+            home_team = game_data.get('home_team', '')
+            away_team = game_data.get('away_team', '')
+            
+            # Fetch last 10 games for each team
+            home_form = self._fetch_team_recent_form(home_team)
+            away_form = self._fetch_team_recent_form(away_team)
+            
+            # Calculate form scores
+            home_score = self._calculate_form_score(home_form)
+            away_score = self._calculate_form_score(away_form)
+            
+            # Determine momentum advantage
+            if home_score > away_score + 1.5:
+                momentum = 'home_strong'
+            elif away_score > home_score + 1.5:
+                momentum = 'away_strong'
+            elif home_score > away_score:
+                momentum = 'home'
+            elif away_score > home_score:
+                momentum = 'away'
+            else:
+                momentum = 'neutral'
+            
+            return {
+                'home_team_form': home_form,
+                'away_team_form': away_form,
+                'home_form_score': home_score,
+                'away_form_score': away_score,
+                'momentum_advantage': momentum,
+                'home_last_5': f"{home_form['wins_last_5']}-{home_form['losses_last_5']}",
+                'away_last_5': f"{away_form['wins_last_5']}-{away_form['losses_last_5']}",
+                'home_streak': home_form.get('streak', 'N/A'),
+                'away_streak': away_form.get('streak', 'N/A'),
+                'form_summary': self._generate_form_summary(home_form, away_form, home_team, away_team),
+                'confidence_adjustment': (home_score - away_score) * 0.02  # 2% per form point difference
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Form analysis error: {e}")
+            return {
+                'home_team_form': 'unknown',
+                'away_team_form': 'unknown',
+                'momentum_advantage': 'neutral',
+                'error': str(e)
+            }
+    
+    def _fetch_team_recent_form(self, team_name: str) -> Dict:
+        """Fetch last 10 games for a team from ESPN"""
+        try:
+            team_abbr = self._get_team_abbreviation(team_name)
+            
+            # ESPN team schedule endpoint
+            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_abbr}/schedule"
+            
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                
+                recent_games = []
+                wins = 0
+                losses = 0
+                wins_last_5 = 0
+                losses_last_5 = 0
+                points_scored = []
+                points_allowed = []
+                current_streak = 0
+                streak_type = None
+                
+                # Parse recent completed games
+                if 'events' in data:
+                    completed_games = [
+                        event for event in data['events']
+                        if event.get('competitions', [{}])[0].get('status', {}).get('type', {}).get('completed', False)
+                    ]
+                    
+                    # Get last 10 completed games
+                    recent_completed = completed_games[-10:] if len(completed_games) >= 10 else completed_games
+                    
+                    for i, event in enumerate(reversed(recent_completed)):
+                        competition = event.get('competitions', [{}])[0]
+                        competitors = competition.get('competitors', [])
+                        
+                        if len(competitors) == 2:
+                            # Find our team
+                            our_team = None
+                            opponent = None
+                            
+                            for comp in competitors:
+                                if comp.get('team', {}).get('abbreviation') == team_abbr:
+                                    our_team = comp
+                                else:
+                                    opponent = comp
+                            
+                            if our_team and opponent:
+                                # Handle score as either int or dict
+                                our_score_raw = our_team.get('score', 0)
+                                opp_score_raw = opponent.get('score', 0)
+                                
+                                # Parse score (could be int or dict with 'value')
+                                if isinstance(our_score_raw, dict):
+                                    our_score = int(our_score_raw.get('value', 0))
+                                else:
+                                    our_score = int(our_score_raw) if our_score_raw else 0
+                                
+                                if isinstance(opp_score_raw, dict):
+                                    opp_score = int(opp_score_raw.get('value', 0))
+                                else:
+                                    opp_score = int(opp_score_raw) if opp_score_raw else 0
+                                
+                                won = our_score > opp_score
+                                
+                                recent_games.append({
+                                    'won': won,
+                                    'score': our_score,
+                                    'opponent_score': opp_score,
+                                    'opponent': opponent.get('team', {}).get('displayName', 'Unknown')
+                                })
+                                
+                                points_scored.append(our_score)
+                                points_allowed.append(opp_score)
+                                
+                                if won:
+                                    wins += 1
+                                    if i < 5:
+                                        wins_last_5 += 1
+                                    
+                                    # Track streak
+                                    if streak_type == 'W' or streak_type is None:
+                                        current_streak += 1
+                                        streak_type = 'W'
+                                    else:
+                                        current_streak = 1
+                                        streak_type = 'W'
+                                else:
+                                    losses += 1
+                                    if i < 5:
+                                        losses_last_5 += 1
+                                    
+                                    # Track streak
+                                    if streak_type == 'L' or streak_type is None:
+                                        current_streak += 1
+                                        streak_type = 'L'
+                                    else:
+                                        current_streak = 1
+                                        streak_type = 'L'
+                
+                # Calculate averages
+                avg_points_scored = sum(points_scored) / len(points_scored) if points_scored else 0
+                avg_points_allowed = sum(points_allowed) / len(points_allowed) if points_allowed else 0
+                
+                return {
+                    'wins': wins,
+                    'losses': losses,
+                    'wins_last_5': wins_last_5,
+                    'losses_last_5': losses_last_5,
+                    'win_percentage': wins / (wins + losses) if (wins + losses) > 0 else 0,
+                    'avg_points_scored': avg_points_scored,
+                    'avg_points_allowed': avg_points_allowed,
+                    'point_differential': avg_points_scored - avg_points_allowed,
+                    'streak': f"{streak_type}{current_streak}" if streak_type else "N/A",
+                    'recent_games': recent_games,
+                    'games_analyzed': len(recent_games)
+                }
+            else:
+                return self._default_form_data()
+                
+        except Exception as e:
+            print(f"⚠️ Could not fetch form for {team_name}: {e}")
+            return self._default_form_data()
+    
+    def _default_form_data(self) -> Dict:
+        """Return default form data when API unavailable"""
         return {
-            'home_team_form': 'good',
-            'away_team_form': 'average',
-            'momentum_advantage': 'home'
+            'wins': 0,
+            'losses': 0,
+            'wins_last_5': 0,
+            'losses_last_5': 0,
+            'win_percentage': 0.5,
+            'avg_points_scored': 110,
+            'avg_points_allowed': 110,
+            'point_differential': 0,
+            'streak': 'N/A',
+            'recent_games': [],
+            'games_analyzed': 0
         }
+    
+    def _calculate_form_score(self, form_data: Dict) -> float:
+        """Calculate overall form score (0-10 scale)"""
+        if form_data.get('games_analyzed', 0) == 0:
+            return 5.0  # Neutral if no data
+        
+        # Weighted scoring
+        win_pct_score = form_data.get('win_percentage', 0.5) * 4  # 0-4 points
+        last_5_score = (form_data.get('wins_last_5', 0) / 5) * 3  # 0-3 points
+        point_diff_score = min(max(form_data.get('point_differential', 0) / 5, -1.5), 1.5) + 1.5  # 0-3 points
+        
+        total_score = win_pct_score + last_5_score + point_diff_score
+        
+        return round(total_score, 2)
+    
+    def _generate_form_summary(self, home_form: Dict, away_form: Dict, 
+                               home_team: str, away_team: str) -> str:
+        """Generate human-readable form summary"""
+        home_record = f"{home_form.get('wins', 0)}-{home_form.get('losses', 0)}"
+        away_record = f"{away_form.get('wins', 0)}-{away_form.get('losses', 0)}"
+        
+        home_last_5 = f"{home_form.get('wins_last_5', 0)}-{home_form.get('losses_last_5', 0)}"
+        away_last_5 = f"{away_form.get('wins_last_5', 0)}-{away_form.get('losses_last_5', 0)}"
+        
+        home_streak = home_form.get('streak', 'N/A')
+        away_streak = away_form.get('streak', 'N/A')
+        
+        summary = f"{home_team}: {home_record} (Last 5: {home_last_5}, Streak: {home_streak}) | "
+        summary += f"{away_team}: {away_record} (Last 5: {away_last_5}, Streak: {away_streak})"
+        
+        return summary
 
 # Example usage and testing
 if __name__ == "__main__":

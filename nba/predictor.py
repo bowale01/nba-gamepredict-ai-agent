@@ -383,6 +383,54 @@ class ReliableNBAPredictor:
             "over_prediction_confidence": over_confidence,
             "games_analyzed": games_count
         }
+
+    def _validate_ou_prediction(self, predicted_total: float, confidence: float) -> bool:
+        """Validate O/U predictions - reject extreme totals unless very high confidence
+
+        Added after Feb 22 disaster: predicted 154.3, actual was 220 (65.7 points off!)
+        """
+
+        # Extreme low totals are very risky
+        if predicted_total < 180:
+            if confidence < 0.90:  # Require 90%+ confidence for extreme predictions
+                return False
+
+        # Extreme high totals also risky
+        if predicted_total > 250:
+            if confidence < 0.90:
+                return False
+
+        return True
+
+    def _calculate_desperation_factor(self, team_form: Dict) -> float:
+        """Calculate desperation factor for teams on losing streaks
+
+        Teams on long losing streaks are dangerous - they're desperate to win.
+        Added after Orlando (0-10 streak) upset LA Clippers on Feb 22.
+        """
+
+        if not team_form:
+            return 0.0
+
+        streak = team_form.get('streak', 'N/A')
+
+        # Check for losing streak
+        if streak.startswith('L'):
+            try:
+                losses = int(streak[1:])
+
+                # Teams on 5+ game losing streaks are highly motivated
+                if losses >= 10:
+                    return 0.20  # Reduce opponent's confidence by 20% for 10+ losses
+                elif losses >= 8:
+                    return 0.15  # Reduce by 15% for 8-9 losses
+                elif losses >= 5:
+                    return 0.10  # Reduce by 10% for 5-7 losses
+            except:
+                pass
+
+        return 0.0
+
     
     def _calculate_point_spread(self, home_team: str, away_team: str, h2h_analysis: Dict, 
                                 prediction_factors: Dict, home_win_prob: float) -> Dict:
@@ -517,12 +565,12 @@ class ReliableNBAPredictor:
         h2h_over_prob = h2h_analysis['over_percentage']
         h2h_halftime_over_prob = h2h_analysis['halftime_over_percentage']
         
-        # Weight H2H data heavily (60%) + statistical analysis (40%)
+        # Balance H2H data (50%) + statistical analysis (50%) - more balanced approach
         base_home_win_prob = prediction_factors['home_advantage'] + prediction_factors['team_strength_diff']
         base_home_win_prob = max(0.25, min(0.85, base_home_win_prob))
         
-        # Final probabilities combining H2H and statistical data
-        home_win_prob = (h2h_home_win_prob * 0.6) + (base_home_win_prob * 0.4)
+        # Final probabilities combining H2H and statistical data (balanced 50/50)
+        home_win_prob = (h2h_home_win_prob * 0.5) + (base_home_win_prob * 0.5)
         away_win_prob = 1.0 - home_win_prob
         
         # Total points prediction with H2H emphasis
@@ -557,12 +605,12 @@ class ReliableNBAPredictor:
         ]
         all_confidence_levels = [spread_confidence, over_prob, max(home_win_prob, away_win_prob), halftime_over_prob]
         
-        # Filter for HIGH CONFIDENCE ONLY (75%+ as per strategy)
+        # Filter for HIGH CONFIDENCE ONLY (85%+ - raised from 75% after poor performance)
         high_confidence_bets = []
         high_confidence_levels = []
         
         for i, (bet, confidence) in enumerate(zip(all_bets, all_confidence_levels)):
-            if confidence >= 0.75:  # 75%+ only as per our strategy
+            if confidence >= 0.85:  # 85%+ only - more conservative after 25% accuracy on Feb 22
                 high_confidence_bets.append(bet)
                 high_confidence_levels.append(confidence)
         
@@ -713,7 +761,7 @@ class ReliableNBAPredictor:
         away_scoring = team_scoring.get(away_team, 110)
         
         # Calculate factors
-        home_advantage = 0.55  # Base home advantage
+        home_advantage = 0.62  # Base home advantage (increased from 0.55 - NBA home court is significant)
         team_strength_diff = (home_strength - away_strength) * 0.3
         expected_total = home_scoring + away_scoring + 2  # Home boost
         market_estimate = expected_total - 1  # Market typically 1-2 points lower

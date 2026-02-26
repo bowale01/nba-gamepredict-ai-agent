@@ -95,6 +95,20 @@ cp .env.example .env
 
 **Run the System:**
 
+**Get Today's Predictions (Recommended):**
+```bash
+python get_today_nba_predictions.py
+
+# Features included:
+# ✅ Real ESPN H2H data
+# ✅ Injury analysis (automatic)
+# ✅ Current form analysis (automatic)
+# ✅ Bedrock AI validation
+# ✅ GPT-4o validation
+# ✅ Table output format
+# ✅ 75% confidence filter
+```
+
 **Local API Service:**
 ```bash
 python api_service.py
@@ -501,17 +515,25 @@ Simple: pick the winner.
 ## 🧪 Testing
 
 ```bash
-# Test today's NBA games
-python check_today_nba.py
-
-# Test tomorrow's games
-python check_tomorrow_games.py
-
-# Get predictions
+# Get today's predictions with all features
 python get_today_nba_predictions.py
 
-# Run API tests
-pytest tests/  # (if tests are added)
+# Features automatically included:
+# - Real ESPN H2H data
+# - Injury reports (ESPN API)
+# - Current form analysis (last 10 games)
+# - Bedrock AI validation
+# - GPT-4o validation
+# - 75% confidence filter
+
+# Test specific features
+python test_injury_check.py  # Test injury & form analysis
+
+# Check today's games schedule
+python check_today_nba.py
+
+# Check tomorrow's games
+python check_tomorrow_games.py
 ```
 
 ---
