@@ -388,11 +388,12 @@ class ReliableNBAPredictor:
         """Validate O/U predictions - reject extreme totals unless very high confidence
 
         Added after Feb 22 disaster: predicted 154.3, actual was 220 (65.7 points off!)
+        Updated: No NBA games go below 200 - minimum threshold increased to 200
         """
 
-        # Extreme low totals are very risky
-        if predicted_total < 180:
-            if confidence < 0.90:  # Require 90%+ confidence for extreme predictions
+        # Extreme low totals are very risky (NBA games rarely go below 200)
+        if predicted_total < 200:
+            if confidence < 0.95:  # Require 95%+ confidence for predictions below 200
                 return False
 
         # Extreme high totals also risky
@@ -578,6 +579,13 @@ class ReliableNBAPredictor:
         statistical_total = prediction_factors['expected_total']
         predicted_total = (h2h_avg_total * 0.6) + (statistical_total * 0.4)
         
+        # VALIDATE: Reject unrealistic predictions (no NBA games below 200)
+        is_valid = self._validate_ou_prediction(predicted_total, max(h2h_over_prob, 1 - h2h_over_prob))
+        if not is_valid or predicted_total < 200:
+            # NEVER predict totals below 200 - NBA games rarely go that low
+            predicted_total = max(200, h2h_avg_total, statistical_total)
+            print(f"   ⚠️ VALIDATION: Adjusted unrealistic total to {predicted_total} (NBA games rarely below 200)")
+        
         # Market estimates
         market_total = predicted_total - 2  # Market typically lower
         market_halftime_total = market_total * 0.48  # ~48% first half
@@ -684,8 +692,11 @@ class ReliableNBAPredictor:
             "prediction_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # AGENTIC AI ENHANCEMENT (if enabled)
-        if self.agentic_ai_enabled and self.ai_enhancer:
+        # AGENTIC AI ENHANCEMENT (disabled - no OpenAI key configured)
+        # This layer was adding unnecessary complexity without improving accuracy
+        # Focus on core: H2H data (60%) + statistical analysis (40%)
+        
+        if False:  # Disabled to simplify and focus on core analysis
             try:
                 print(f"🤖 Applying Agentic AI enhancement for {home_team} vs {away_team}...")
                 

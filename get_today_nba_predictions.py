@@ -59,7 +59,7 @@ def main():
     print("📊 Real Data Only - No Mock Data")
     print("🏥 Injury Analysis: ENABLED")
     print("📈 Current Form Analysis: ENABLED")
-    print("🤖 Dual AI Validation: Bedrock + GPT-4o")
+    print("🤖 AI Enhancement: Real H2H Data Analysis + ESPN API")
     print("🎯 85% Confidence Threshold (Raised from 75%)")
     print("🌟 Player Props: ENABLED (Real ESPN roster data)")
     print("=" * 80)
@@ -91,9 +91,9 @@ def main():
         print("⏱️  This will take 2-3 minutes (analyzing 17 games with injury/form data)")
         print()
         
-        # Initialize predictor with all features
+        # Initialize predictor with core features (no fake Bedrock/GPT)
         predictor = ReliableNBAPredictor(
-            enable_agentic_ai=True,      # Enables injury & form analysis
+            enable_agentic_ai=False,      # Disabled - no OpenAI key configured
             enable_player_props=True      # Enables player props (REAL DATA ONLY)
         )
         
@@ -233,12 +233,12 @@ def main():
     print("=" * 150)
     print()
     print("💡 Features Used:")
-    print("   ✅ Real ESPN H2H Data")
+    print("   ✅ Real ESPN H2H Data (60% weight)")
+    print("   ✅ Statistical Analysis (40% weight)")
     print("   ✅ Injury Reports (ESPN API)")
     print("   ✅ Current Form Analysis (Last 10 games)")
-    print("   ✅ Player Props (Real roster data - fastest growing market!)")
-    print("   ✅ Bedrock AI Validation")
-    print("   ✅ GPT-4o Historical Context")
+    print("   ✅ Player Props (Real roster data)")
+    print("   ✅ O/U Validation (Minimum 200 points enforced)")
     print("   ✅ 85% Confidence Filter (Raised from 75%)")
     print()
     print(f"📝 Results cached for {CACHE_DURATION_MINUTES} minutes")
